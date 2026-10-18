@@ -1,0 +1,16 @@
+# Optional PostgreSQL container. If you already use PostgreSQL on Ubuntu,
+# you can skip this file and create the database locally instead.
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: healthcare_db
+      POSTGRES_USER: healthcare_app
+      POSTGRES_PASSWORD: change_me
+    ports:
+      - '5433:5432'
+    volumes:
+      - healthcare_pgdata:/var/lib/postgresql/data
+volumes:
+  healthcare_pgdata:

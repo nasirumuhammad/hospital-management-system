@@ -1,0 +1,90 @@
+import { Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { randomUUID } from "node:crypto";
+import { LoggerModule } from "nestjs-pino";
+import { AppointmentsModule } from "./appointments/appointments.module";
+import { AuditModule } from "./audit/audit.module";
+import { AuthModule } from "./auth/auth.module";
+import { DEFAULT_THROTTLE } from "./common/constants/auth.constants";
+import { EnvironmentVariables, validateEnv } from "./config/env.validation";
+import { DashboardModule } from "./dashboard/dashboard.module";
+import { DoctorsModule } from "./doctors/doctors.module";
+import { HealthController } from "./health/health.controller";
+import { InvoicesModule } from "./invoices/invoices.module";
+import { MedicalRecordsModule } from "./medical-records/medical-records.module";
+import { PatientsModule } from "./patients/patients.module";
+import { PrescriptionsModule } from "./prescriptions/prescriptions.module";
+import { UsersModule } from "./users/users.module";
+
+const HTTP_ERROR_STATUS = 400;
+const SERVER_ERROR_STATUS = 500;
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    LoggerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<EnvironmentVariables, true>) => ({
+        pinoHttp: {
+          level: config.get("LOG_LEVEL", { infer: true }),
+          genReqId: (_request, response) => {
+            const id = randomUUID();
+            response.setHeader("X-Request-Id", id);
+            return id;
+          },
+          customLogLevel: (_request, response, error) => {
+            if (error || response.statusCode >= SERVER_ERROR_STATUS)
+              return "error";
+            return response.statusCode >= HTTP_ERROR_STATUS ? "warn" : "silent";
+          },
+          serializers: {
+            req: (request: { id: string; method: string; url: string }) => ({
+              id: request.id,
+              method: request.method,
+              url: request.url.split("?")[0],
+            }),
+            res: (response: { statusCode: number }) => ({
+              statusCode: response.statusCode,
+            }),
+          },
+          transport:
+            config.get("NODE_ENV", { infer: true }) === "development"
+              ? { target: "pino-pretty" }
+              : undefined,
+        },
+      }),
+    }),
+    ThrottlerModule.forRoot({
+      throttlers: [{ name: "default", ...DEFAULT_THROTTLE }],
+      skipIf: () => process.env.NODE_ENV === "test",
+    }),
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<EnvironmentVariables, true>) => ({
+        type: "postgres" as const,
+        username: "postgres",
+        password: "postgres",
+        database: "health_system",
+        autoLoadEntities: true,
+        synchronize: false,
+        migrationsRun: false,
+      }),
+    }),
+    AuditModule,
+    UsersModule,
+    AuthModule,
+    PatientsModule,
+    DoctorsModule,
+    AppointmentsModule,
+    MedicalRecordsModule,
+    PrescriptionsModule,
+    InvoicesModule,
+    DashboardModule,
+  ],
+  controllers: [HealthController],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+})
+export class AppModule {}

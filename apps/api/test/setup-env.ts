@@ -1,0 +1,11 @@
+process.env.NODE_ENV = 'test';
+process.env.LOG_LEVEL = 'silent';
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'postgresql://healthcare_app:change_me@localhost:5432/healthcare_test';
+process.env.JWT_SECRET = 'e2e_secret_that_is_definitely_longer_than_32_characters';
+process.env.WEB_ORIGIN = 'http://localhost:3000';
+process.env.WEB_URL = 'http://localhost:3000';
+process.env.ADMIN_EMAIL = 'admin@example.com';
+process.env.ADMIN_PASSWORD = 'Admin-Password-12345';
+process.env.ADMIN_NAME = 'Test Admin';
+process.env.MAIL_TRANSPORT = 'console';
+process.env.REQUIRE_EMAIL_VERIFICATION = 'false';

@@ -1,0 +1,12 @@
+import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { Trimmed } from '../../common/validators/trimmed.decorator';
+
+export class CreatePrescriptionDto {
+  @IsUUID() patientId: string;
+  @IsOptional() @IsUUID() medicalRecordId?: string;
+  @Trimmed() @IsString() @IsNotEmpty() @MaxLength(180) medication: string;
+  @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) dosage: string;
+  @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) frequency: string;
+  @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) duration: string;
+  @IsOptional() @Trimmed() @IsString() @MaxLength(2000) instructions?: string;
+}

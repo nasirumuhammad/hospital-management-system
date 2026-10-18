@@ -1,0 +1,13 @@
+import { IsEnum, IsIn, IsISO8601, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { AppointmentStatus } from '../../common/enums/appointment-status.enum';
+
+export class ListAppointmentsQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsString() @MaxLength(100) q?: string;
+  @IsOptional() @IsEnum(AppointmentStatus) status?: AppointmentStatus;
+  @IsOptional() @IsUUID() doctorId?: string;
+  @IsOptional() @IsUUID() patientId?: string;
+  @IsOptional() @IsISO8601() from?: string;
+  @IsOptional() @IsISO8601() to?: string;
+  @IsOptional() @IsIn(['asc', 'desc']) order?: 'asc' | 'desc';
+}
