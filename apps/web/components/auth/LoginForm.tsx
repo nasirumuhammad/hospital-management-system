@@ -1,23 +1,17 @@
 'use client';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { AuthCard } from '@/components/auth/AuthCard';
-import { Field } from '@/components/ui/Fields';
 import { ErrorBanner } from '@/components/ui/Feedback';
+import { Field } from '@/components/ui/Fields';
 import { errorMessage } from '@/lib/api-client';
 import { readForm } from '@/lib/form';
 
-export default function LoginPage() {
-  const { status, login } = useAuth();
+export function LoginForm() {
+  const { login } = useAuth();
   const router = useRouter();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (status === 'authenticated') router.replace('/');
-  }, [status, router]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -26,6 +20,8 @@ export default function LoginPage() {
     setError('');
     try {
       await login(email, password);
+      router.replace('/');
+      router.refresh(); // re-render server components with the new session cookie
     } catch (failure) {
       setError(errorMessage(failure, 'Sign in failed'));
     } finally {
@@ -34,14 +30,13 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthCard eyebrow="WELCOME BACK" title="Sign in to CarePoint" description="Access your hospital workspace securely.">
+    <>
       <ErrorBanner message={error} />
       <form onSubmit={submit}>
         <Field label="Email address" name="email" type="email" required autoComplete="username" />
         <Field label="Password" name="password" type="password" required autoComplete="current-password" />
         <button className="btn primary auth-submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in securely'}</button>
       </form>
-      <div className="auth-links"><Link href="/forgot-password">Forgot your password?</Link></div>
-    </AuthCard>
+    </>
   );
 }

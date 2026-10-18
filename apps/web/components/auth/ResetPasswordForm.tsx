@@ -1,15 +1,11 @@
 'use client';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
-import { AuthCard } from '@/components/auth/AuthCard';
+import { useState } from 'react';
 import { ErrorBanner, SuccessBanner } from '@/components/ui/Feedback';
 import { Field } from '@/components/ui/Fields';
 import { api, errorMessage } from '@/lib/api-client';
 import { readForm } from '@/lib/form';
 
-function ResetPasswordForm() {
-  const token = useSearchParams().get('token') ?? '';
+export function ResetPasswordForm({ token }: { token: string }) {
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -30,7 +26,6 @@ function ResetPasswordForm() {
     }
   }
 
-  if (!token) return <ErrorBanner message="This reset link is incomplete. Request a new one." />;
   return (
     <>
       <ErrorBanner message={error} />
@@ -42,14 +37,5 @@ function ResetPasswordForm() {
         </form>
       )}
     </>
-  );
-}
-
-export default function ResetPasswordPage() {
-  return (
-    <AuthCard eyebrow="ACCOUNT RECOVERY" title="Choose a new password" description="Pick a strong password you have not used elsewhere.">
-      <Suspense fallback={null}><ResetPasswordForm /></Suspense>
-      <div className="auth-links"><Link href="/login">Back to sign in</Link></div>
-    </AuthCard>
   );
 }

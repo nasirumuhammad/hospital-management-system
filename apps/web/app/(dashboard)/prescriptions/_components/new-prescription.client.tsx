@@ -1,50 +1,25 @@
 'use client';
-import { useMemo, useState } from 'react';
-import type { MedicalRecord, Patient, Prescription } from '@healthcare/types';
-import { useCurrentUser } from '@/components/auth/AuthProvider';
-import { EmptyState, ErrorBanner } from '@/components/ui/Feedback';
+import { Plus } from 'lucide-react';
+import { useState } from 'react';
+import type { MedicalRecord, Patient } from '@healthcare/types';
+import { ErrorBanner } from '@/components/ui/Feedback';
 import { Field, Select, TextArea } from '@/components/ui/Fields';
 import { Modal, ModalActions } from '@/components/ui/Modal';
-import { Pagination } from '@/components/ui/Pagination';
-import { ListPanel, PageHeader, PersonCell } from '@/components/ui/Page';
 import { api, errorMessage } from '@/lib/api-client';
 import { formatDate, fullName } from '@/lib/format';
 import { readForm } from '@/lib/form';
+import { useRefreshAction } from '@/lib/use-action';
 import { useList } from '@/lib/use-list';
 
 const OPTION_LIMIT = 100;
 
-export default function PrescriptionsPage() {
-  const isDoctor = useCurrentUser().role === 'DOCTOR';
-  const [page, setPage] = useState(1);
-  const [creating, setCreating] = useState(false);
-  const query = useMemo(() => ({ page, limit: 15 }), [page]);
-  const list = useList<Prescription>('/prescriptions', query);
-
+export function NewPrescriptionButton() {
+  const [open, setOpen] = useState(false);
+  const { refresh } = useRefreshAction();
   return (
     <>
-      <PageHeader title="Prescriptions" description="Medication orders." actionLabel={isDoctor ? 'New prescription' : undefined} onAction={() => setCreating(true)} />
-      <ErrorBanner message={list.error} onDismiss={() => list.setError('')} />
-      <ListPanel title="Prescriptions" description={`${list.data?.total ?? 0} prescriptions`}>
-        <div className="table-scroll">
-          <table>
-            <thead><tr><th>Patient</th><th>Medication</th><th>Dosage</th><th>Frequency</th><th>Duration</th><th>Prescribed by</th><th>Date</th></tr></thead>
-            <tbody>
-              {list.items.map((item) => (
-                <tr key={item.id}>
-                  <td><PersonCell name={fullName(item.patient)} tone="patient" /></td>
-                  <td><b>{item.medication}</b>{item.instructions && <small className="sub-cell">{item.instructions}</small>}</td>
-                  <td>{item.dosage}</td><td>{item.frequency}</td><td>{item.duration}</td>
-                  <td>Dr. {fullName(item.doctor)}</td><td>{formatDate(item.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {list.items.length === 0 && <EmptyState loading={list.loading} label="prescriptions" />}
-        </div>
-        <Pagination data={list.data} onPage={setPage} />
-      </ListPanel>
-      {creating && <PrescriptionModal onClose={() => setCreating(false)} onSaved={() => { setCreating(false); void list.reload(); }} />}
+      <button className="btn primary" onClick={() => setOpen(true)}><Plus size={17} /> New prescription</button>
+      {open && <PrescriptionModal onClose={() => setOpen(false)} onSaved={() => { setOpen(false); refresh(); }} />}
     </>
   );
 }

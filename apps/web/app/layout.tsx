@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { AuthProvider } from '@/components/auth/AuthProvider';
+import { getSessionUser } from '@/lib/session';
 import './globals.css';
 
 const FONT_STYLESHEET =
@@ -8,7 +9,8 @@ const FONT_STYLESHEET =
 export const metadata: Metadata = { title: 'CarePoint | Hospital Management', description: 'Hospital management dashboard' };
 export const viewport: Viewport = { themeColor: '#0b6b4d' };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const user = await getSessionUser();
   return (
     <html lang="en">
       <head>
@@ -16,7 +18,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href={FONT_STYLESHEET} />
       </head>
-      <body><AuthProvider>{children}</AuthProvider></body>
+      <body><AuthProvider key={user?.id ?? 'anonymous'} initialUser={user}>{children}</AuthProvider></body>
     </html>
   );
 }

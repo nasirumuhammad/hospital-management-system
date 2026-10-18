@@ -1,19 +1,16 @@
-'use client';
 import { CalendarDays, Clock3, ReceiptText, Stethoscope, Users } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import type { Appointment, DashboardSummary, Doctor } from '@healthcare/types';
-import { useCurrentUser } from '@/components/auth/AuthProvider';
-import { ErrorBanner } from '@/components/ui/Feedback';
+import type { Appointment, DashboardSummary, Doctor, Paginated } from '@healthcare/types';
 import { PersonCell } from '@/components/ui/Page';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { api, errorMessage } from '@/lib/api-client';
 import { formatDateTime, formatLongDate, fullName, greeting } from '@/lib/format';
-import { useList } from '@/lib/use-list';
+import { serverApi } from '@/lib/server-api';
+import { getSessionUser } from '@/lib/session';
 
-type StatTone = 'default' | 'attention';
+const UPCOMING_LIMIT = 5;
+const TEAM_LIMIT = 4;
 
-function Stat({ icon, label, value, note, tone = 'default' }: { icon: React.ReactNode; label: string; value: number | undefined; note: string; tone?: StatTone }) {
+function Stat({ icon, label, value, note, tone = 'default' }: { icon: React.ReactNode; label: string; value: number | undefined; note: string; tone?: 'default' | 'attention' }) {
   if (value === undefined) return null;
   return (
     <div className={`stat-card ${tone}`}>
@@ -24,17 +21,16 @@ function Stat({ icon, label, value, note, tone = 'default' }: { icon: React.Reac
   );
 }
 
-export default function OverviewPage() {
-  const user = useCurrentUser();
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [error, setError] = useState('');
-  const upcomingQuery = useMemo(() => ({ limit: 5, from: new Date().toISOString(), status: undefined }), []);
-  const upcoming = useList<Appointment>('/appointments', upcomingQuery);
-  const doctors = useList<Doctor>('/doctors', { limit: 4 });
+export default async function OverviewPage() {
+  const user = await getSessionUser();
+  if (!user) return null;
 
-  useEffect(() => {
-    api<DashboardSummary>('/dashboard/summary').then(setSummary).catch((failure) => setError(errorMessage(failure)));
-  }, []);
+  // Independent requests run in parallel instead of as a client-side waterfall.
+  const [summary, upcoming, doctors] = await Promise.all([
+    serverApi<DashboardSummary>('/dashboard/summary'),
+    serverApi<Paginated<Appointment>>('/appointments', { query: { limit: UPCOMING_LIMIT, from: new Date().toISOString() } }),
+    serverApi<Paginated<Doctor>>('/doctors', { query: { limit: TEAM_LIMIT } }),
+  ]);
 
   return (
     <>
@@ -45,14 +41,13 @@ export default function OverviewPage() {
           <p>Here’s what’s happening at your hospital today.</p>
         </div>
       </div>
-      <ErrorBanner message={error || upcoming.error} onDismiss={() => setError('')} />
       <div className="stats-grid">
-        <Stat icon={<Users />} label="Total patients" value={summary?.patients} note="Registered patients" />
-        <Stat icon={<Stethoscope />} label="Active doctors" value={summary?.doctors} note="Available specialists" />
-        <Stat icon={<CalendarDays />} label="Appointments" value={summary?.appointments} note="All scheduled visits" />
-        <Stat icon={<Clock3 />} label="Awaiting review" value={summary?.pendingAppointments} note="Pending appointments" tone="attention" />
-        <Stat icon={<CalendarDays />} label="Upcoming" value={summary?.upcomingAppointments} note="Pending or confirmed, from now" />
-        <Stat icon={<ReceiptText />} label="Outstanding invoices" value={summary?.outstandingInvoices} note="Unpaid or part-paid" tone="attention" />
+        <Stat icon={<Users />} label="Total patients" value={summary.patients} note="Registered patients" />
+        <Stat icon={<Stethoscope />} label="Active doctors" value={summary.doctors} note="Available specialists" />
+        <Stat icon={<CalendarDays />} label="Appointments" value={summary.appointments} note="All scheduled visits" />
+        <Stat icon={<Clock3 />} label="Awaiting review" value={summary.pendingAppointments} note="Pending appointments" tone="attention" />
+        <Stat icon={<CalendarDays />} label="Upcoming" value={summary.upcomingAppointments} note="Pending or confirmed, from now" />
+        <Stat icon={<ReceiptText />} label="Outstanding invoices" value={summary.outstandingInvoices} note="Unpaid or part-paid" tone="attention" />
       </div>
       <div className="dashboard-grid">
         <div className="panel">
@@ -74,7 +69,7 @@ export default function OverviewPage() {
                 ))}
               </tbody>
             </table>
-            {upcoming.items.length === 0 && <div className="empty-small">{upcoming.loading ? 'Loading…' : 'No upcoming appointments.'}</div>}
+            {upcoming.items.length === 0 && <div className="empty-small">No upcoming appointments.</div>}
           </div>
         </div>
         <div className="panel staff-panel">
@@ -86,7 +81,7 @@ export default function OverviewPage() {
               <span className="presence present" />
             </div>
           ))}
-          {doctors.items.length === 0 && <p className="empty-small">{doctors.loading ? 'Loading…' : 'No doctors yet.'}</p>}
+          {doctors.items.length === 0 && <p className="empty-small">No doctors yet.</p>}
         </div>
       </div>
     </>

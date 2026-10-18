@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 
 const DEBOUNCE_MS = 300;
 
-export function SearchBox({ onSearch, placeholder = 'Search records...' }: { onSearch: (term: string) => void; placeholder?: string }) {
-  const [value, setValue] = useState('');
+export function SearchBox({ onSearch, placeholder = 'Search records...', initialValue = '' }: { onSearch: (term: string) => void; placeholder?: string; initialValue?: string }) {
+  const [value, setValue] = useState(initialValue);
 
   useEffect(() => {
     const timer = setTimeout(() => onSearch(value.trim()), DEBOUNCE_MS);

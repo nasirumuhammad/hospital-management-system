@@ -1,61 +1,38 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
-import { INVOICE_STATUSES, PAYMENT_METHODS, type Invoice, type Patient } from '@healthcare/types';
+import { Plus } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { PAYMENT_METHODS, type Invoice, type Patient } from '@healthcare/types';
 import { useCurrentUser } from '@/components/auth/AuthProvider';
-import { EmptyState, ErrorBanner } from '@/components/ui/Feedback';
+import { ErrorBanner } from '@/components/ui/Feedback';
 import { Field, Select } from '@/components/ui/Fields';
 import { Modal, ModalActions } from '@/components/ui/Modal';
-import { Pagination } from '@/components/ui/Pagination';
-import { ListPanel, PageHeader, PersonCell } from '@/components/ui/Page';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { api, errorMessage } from '@/lib/api-client';
-import { formatDate, formatDateTime, formatMoney, fullName, titleCase } from '@/lib/format';
+import { formatDateTime, formatMoney, fullName, titleCase } from '@/lib/format';
 import { readForm } from '@/lib/form';
+import { useRefreshAction } from '@/lib/use-action';
 import { useList } from '@/lib/use-list';
 
 const OPTION_LIMIT = 100;
 
-export default function InvoicesPage() {
-  const isAdmin = useCurrentUser().role === 'ADMIN';
-  const [page, setPage] = useState(1);
-  const [status, setStatus] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const query = useMemo(() => ({ page, limit: 15, status: status || undefined }), [page, status]);
-  const list = useList<Invoice>('/invoices', query);
-
+export function CreateInvoiceButton() {
+  const [open, setOpen] = useState(false);
+  const { refresh } = useRefreshAction();
   return (
     <>
-      <PageHeader title="Invoices" description="Billing and payments." actionLabel={isAdmin ? 'Create invoice' : undefined} onAction={() => setCreating(true)} />
-      <ErrorBanner message={list.error} onDismiss={() => list.setError('')} />
-      <ListPanel title="Invoices" description={`${list.data?.total ?? 0} invoices`} toolbar={
-        <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} aria-label="Filter by status">
-          <option value="">All statuses</option>
-          {INVOICE_STATUSES.map((value) => <option key={value} value={value}>{titleCase(value)}</option>)}
-        </select>
-      }>
-        <div className="table-scroll">
-          <table>
-            <thead><tr><th>Patient</th><th>Description</th><th>Amount</th><th>Paid</th><th>Due</th><th>Status</th><th /></tr></thead>
-            <tbody>
-              {list.items.map((invoice) => (
-                <tr key={invoice.id}>
-                  <td><PersonCell name={fullName(invoice.patient)} tone="patient" /></td>
-                  <td>{invoice.description}</td>
-                  <td>{formatMoney(invoice.amount)}</td><td>{formatMoney(invoice.amountPaid)}</td>
-                  <td>{invoice.dueDate ? formatDate(invoice.dueDate) : '—'}</td>
-                  <td><StatusBadge value={invoice.status} /></td>
-                  <td><button className="btn secondary small" onClick={() => setOpenId(invoice.id)}>Details</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {list.items.length === 0 && <EmptyState loading={list.loading} label="invoices" />}
-        </div>
-        <Pagination data={list.data} onPage={setPage} />
-      </ListPanel>
-      {creating && <InvoiceModal onClose={() => setCreating(false)} onSaved={() => { setCreating(false); void list.reload(); }} />}
-      {openId && <InvoiceDetailModal id={openId} onClose={() => setOpenId(null)} onChanged={() => void list.reload()} />}
+      <button className="btn primary" onClick={() => setOpen(true)}><Plus size={17} /> Create invoice</button>
+      {open && <InvoiceModal onClose={() => setOpen(false)} onSaved={() => { setOpen(false); refresh(); }} />}
+    </>
+  );
+}
+
+export function InvoiceDetailsButton({ id }: { id: string }) {
+  const [open, setOpen] = useState(false);
+  const { refresh } = useRefreshAction();
+  return (
+    <>
+      <button className="btn secondary small" onClick={() => setOpen(true)}>Details</button>
+      {open && <InvoiceDetailModal id={id} onClose={() => setOpen(false)} onChanged={refresh} />}
     </>
   );
 }

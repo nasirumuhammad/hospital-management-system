@@ -1,17 +1,15 @@
-'use client';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { AuthRedirect } from '@/components/auth/AuthRedirect';
+import { SessionRefresh } from '@/components/auth/SessionRefresh';
 import { DashboardShell } from '@/components/shell/DashboardShell';
+import { getSessionUser } from '@/lib/session';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { status } = useAuth();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (status === 'anonymous') router.replace('/login');
-  }, [status, router]);
-
-  if (status !== 'authenticated') return <div className="auth-loading">Loading CarePoint…</div>;
-  return <DashboardShell>{children}</DashboardShell>;
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const user = await getSessionUser();
+  if (!user) return <SessionRefresh />;
+  return (
+    <>
+      <AuthRedirect />
+      <DashboardShell>{children}</DashboardShell>
+    </>
+  );
 }

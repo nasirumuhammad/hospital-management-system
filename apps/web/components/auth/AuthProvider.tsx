@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { SessionUser } from '@healthcare/types';
 import { api, setSessionExpiredHandler } from '@/lib/api-client';
 
-type AuthStatus = 'loading' | 'authenticated' | 'anonymous';
+type AuthStatus = 'authenticated' | 'anonymous';
 
 interface AuthContextValue {
   user: SessionUser | null;
@@ -15,9 +15,9 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUserState] = useState<SessionUser | null>(null);
-  const [status, setStatus] = useState<AuthStatus>('loading');
+export function AuthProvider({ children, initialUser = null }: { children: React.ReactNode; initialUser?: SessionUser | null }) {
+  const [user, setUserState] = useState<SessionUser | null>(initialUser);
+  const [status, setStatus] = useState<AuthStatus>(initialUser ? 'authenticated' : 'anonymous');
 
   const clearSession = useCallback(() => {
     setUserState(null);
@@ -31,9 +31,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setSessionExpiredHandler(clearSession);
-    api<SessionUser>('/auth/me').then(setUser).catch(clearSession);
     return () => setSessionExpiredHandler(null);
-  }, [clearSession, setUser]);
+  }, [clearSession]);
 
   const login = useCallback(async (email: string, password: string) => {
     const result = await api<{ user: SessionUser }>('/auth/login', { method: 'POST', body: { email, password } });
