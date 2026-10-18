@@ -151,7 +151,7 @@ function RescheduleModal({ appointment, onClose, onSaved }: { appointment: Appoi
   return (
     <Modal title="Reschedule appointment" eyebrow="UPDATE" onClose={onClose} onSubmit={submit}>
       <ErrorBanner message={error} />
-      <p className="auth-description">Currently {formatDateTime(appointment.scheduledAt)} with Dr. {fullName(appointment.doctor)}.</p>
+      <p className="lede">Currently {formatDateTime(appointment.scheduledAt)} with Dr. {fullName(appointment.doctor)}.</p>
       <Field label="New date and time" name="scheduledAt" type="datetime-local" required />
       <ModalActions onCancel={onClose} submitLabel="Reschedule" busy={busy} />
     </Modal>

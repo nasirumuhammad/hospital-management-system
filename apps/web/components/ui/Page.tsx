@@ -10,7 +10,6 @@ export function PageHeader({ title, description, actionLabel, onAction, extra }:
   return (
     <div className="page-heading">
       <div>
-        <div className="eyebrow">{title.toUpperCase()}</div>
         <h1>{title}</h1>
         <p>{description}</p>
       </div>

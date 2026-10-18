@@ -8,17 +8,18 @@ import { ErrorBanner } from '@/components/ui/Feedback';
 import { PersonCell } from '@/components/ui/Page';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { api, errorMessage } from '@/lib/api-client';
-import { formatDateTime, fullName } from '@/lib/format';
+import { formatDateTime, formatLongDate, fullName, greeting } from '@/lib/format';
 import { useList } from '@/lib/use-list';
 
-function Stat({ icon, label, value, note, tone }: { icon: React.ReactNode; label: string; value: number | undefined; note: string; tone: string }) {
+type StatTone = 'default' | 'attention';
+
+function Stat({ icon, label, value, note, tone = 'default' }: { icon: React.ReactNode; label: string; value: number | undefined; note: string; tone?: StatTone }) {
   if (value === undefined) return null;
   return (
-    <div className="stat-card">
-      <div className={`stat-icon ${tone}`}>{icon}</div>
-      <div className="stat-label">{label}</div>
+    <div className={`stat-card ${tone}`}>
+      <div className="stat-top"><span className="stat-label">{label}</span><span className="stat-icon">{icon}</span></div>
       <div className="stat-value">{value}</div>
-      <div className="stat-note"><span /> {note}</div>
+      <div className="stat-note">{note}</div>
     </div>
   );
 }
@@ -39,19 +40,19 @@ export default function OverviewPage() {
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">HOSPITAL OVERVIEW</div>
-          <h1>Welcome, {user.name.split(' ')[0]}</h1>
+          <div className="eyebrow">{formatLongDate()}</div>
+          <h1>{greeting()}, {user.name.split(' ')[0]}</h1>
           <p>Here’s what’s happening at your hospital today.</p>
         </div>
       </div>
       <ErrorBanner message={error || upcoming.error} onDismiss={() => setError('')} />
       <div className="stats-grid">
-        <Stat icon={<Users />} label="Total patients" value={summary?.patients} note="Registered patients" tone="blue" />
-        <Stat icon={<Stethoscope />} label="Active doctors" value={summary?.doctors} note="Available specialists" tone="teal" />
-        <Stat icon={<CalendarDays />} label="Appointments" value={summary?.appointments} note="All scheduled visits" tone="purple" />
-        <Stat icon={<Clock3 />} label="Awaiting review" value={summary?.pendingAppointments} note="Pending appointments" tone="orange" />
-        <Stat icon={<CalendarDays />} label="Upcoming" value={summary?.upcomingAppointments} note="Pending or confirmed, from now" tone="teal" />
-        <Stat icon={<ReceiptText />} label="Outstanding invoices" value={summary?.outstandingInvoices} note="Unpaid or part-paid" tone="orange" />
+        <Stat icon={<Users />} label="Total patients" value={summary?.patients} note="Registered patients" />
+        <Stat icon={<Stethoscope />} label="Active doctors" value={summary?.doctors} note="Available specialists" />
+        <Stat icon={<CalendarDays />} label="Appointments" value={summary?.appointments} note="All scheduled visits" />
+        <Stat icon={<Clock3 />} label="Awaiting review" value={summary?.pendingAppointments} note="Pending appointments" tone="attention" />
+        <Stat icon={<CalendarDays />} label="Upcoming" value={summary?.upcomingAppointments} note="Pending or confirmed, from now" />
+        <Stat icon={<ReceiptText />} label="Outstanding invoices" value={summary?.outstandingInvoices} note="Unpaid or part-paid" tone="attention" />
       </div>
       <div className="dashboard-grid">
         <div className="panel">

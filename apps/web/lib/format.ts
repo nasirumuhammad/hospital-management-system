@@ -1,6 +1,8 @@
 const LOCALE = 'en-NG';
 const CURRENCY = 'NGN';
 const INITIALS_LENGTH = 2;
+const NOON_HOUR = 12;
+const EVENING_HOUR = 18;
 
 export const initials = (name: string): string =>
   name.split(' ').filter(Boolean).map((part) => part[0]).join('').slice(0, INITIALS_LENGTH).toUpperCase();
@@ -23,3 +25,13 @@ export const titleCase = (value: string): string =>
   value.toLowerCase().split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 
 export const toIsoFromLocalInput = (value: string): string => new Date(value).toISOString();
+
+export const greeting = (now: Date = new Date()): string => {
+  const hour = now.getHours();
+  if (hour < NOON_HOUR) return 'Good morning';
+  if (hour < EVENING_HOUR) return 'Good afternoon';
+  return 'Good evening';
+};
+
+export const formatLongDate = (now: Date = new Date()): string =>
+  now.toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' });
