@@ -16,7 +16,18 @@ export interface TestContext {
   mail: FakeMailService;
 }
 
+const TEST_DATABASE_MARKER = 'test';
+
+/** resetDatabase() drops every table: refuse to run against anything that is not clearly a test database. */
+function assertTestDatabase(): void {
+  const databaseName = new URL(process.env.DATABASE_URL as string).pathname.slice(1);
+  if (!databaseName.includes(TEST_DATABASE_MARKER)) {
+    throw new Error(`Refusing to reset "${databaseName}": e2e tests only run against a database whose name contains "${TEST_DATABASE_MARKER}"`);
+  }
+}
+
 async function resetDatabase(): Promise<void> {
+  assertTestDatabase();
   await dataSource.initialize();
   await dataSource.dropDatabase();
   await dataSource.runMigrations();

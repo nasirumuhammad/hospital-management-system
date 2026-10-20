@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
   MinLength,
@@ -28,6 +29,12 @@ export class EnvironmentVariables {
   @Min(1)
   @Max(65535)
   API_PORT: number = 4000;
+
+  @IsString()
+  @Matches(/^postgres(ql)?:\/\//, {
+    message: "DATABASE_URL must be a postgres:// or postgresql:// connection string",
+  })
+  DATABASE_URL: string;
 
   @Transform(toBoolean)
   @IsBoolean()
@@ -82,31 +89,21 @@ export class EnvironmentVariables {
   @Transform(toBoolean) @IsBoolean() REQUIRE_EMAIL_VERIFICATION: boolean =
     false;
 
-  @IsIn(["smtp", "console"])
-  MAIL_TRANSPORT: "smtp" | "console" = "console";
+  @IsIn(["resend", "console"])
+  MAIL_TRANSPORT: "resend" | "console" = "console";
 
   @IsString()
   MAIL_FROM: string = "CarePoint <no-reply@carepoint.local>";
 
   @IsOptional()
   @IsString()
-  SMTP_HOST?: string;
+  RESEND_API_KEY?: string;
+}
 
-  @Type(() => Number)
-  @IsInt()
-  SMTP_PORT: number = 587;
-
-  @IsOptional()
-  @IsString()
-  SMTP_USER?: string;
-
-  @IsOptional()
-  @IsString()
-  SMTP_PASSWORD?: string;
-
-  @Transform(toBoolean)
-  @IsBoolean()
-  SMTP_SECURE: boolean = false;
+function mailProblems(env: EnvironmentVariables): string[] {
+  if (env.MAIL_TRANSPORT === "resend" && !env.RESEND_API_KEY)
+    return ["RESEND_API_KEY is required when MAIL_TRANSPORT=resend"];
+  return [];
 }
 
 function productionProblems(env: EnvironmentVariables): string[] {
@@ -114,10 +111,8 @@ function productionProblems(env: EnvironmentVariables): string[] {
   const problems: string[] = [];
   if (env.JWT_SECRET.startsWith(PLACEHOLDER_PREFIX))
     problems.push("JWT_SECRET is still the placeholder value");
-  if (env.MAIL_TRANSPORT !== "smtp")
-    problems.push('MAIL_TRANSPORT must be "smtp" in production');
-  if (env.MAIL_TRANSPORT === "smtp" && !env.SMTP_HOST)
-    problems.push("SMTP_HOST is required when MAIL_TRANSPORT=smtp");
+  if (env.MAIL_TRANSPORT !== "resend")
+    problems.push('MAIL_TRANSPORT must be "resend" in production');
   if (!env.WEB_URL.startsWith("https://"))
     problems.push("WEB_URL must use https in production");
   return problems;
@@ -132,6 +127,7 @@ export function validateEnv(
   const errors = validateSync(env, { skipMissingProperties: false });
   const problems = [
     ...errors.map((error) => Object.values(error.constraints ?? {}).join(", ")),
+    ...mailProblems(env),
     ...productionProblems(env),
   ];
   if (problems.length > 0)

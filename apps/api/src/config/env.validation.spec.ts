@@ -26,8 +26,13 @@ describe('validateEnv', () => {
   it('refuses unsafe production settings', () => {
     const production = { ...valid, NODE_ENV: 'production' };
     expect(() => validateEnv(production)).toThrow(/MAIL_TRANSPORT/);
-    expect(() => validateEnv({ ...production, JWT_SECRET: `replace_with_${'a'.repeat(30)}`, MAIL_TRANSPORT: 'smtp', SMTP_HOST: 'smtp.example.com', WEB_URL: 'https://app.example.com' })).toThrow(/placeholder/);
-    expect(() => validateEnv({ ...production, MAIL_TRANSPORT: 'smtp', SMTP_HOST: 'smtp.example.com', WEB_URL: 'http://app.example.com' })).toThrow(/https/);
-    expect(() => validateEnv({ ...production, MAIL_TRANSPORT: 'smtp', SMTP_HOST: 'smtp.example.com', WEB_URL: 'https://app.example.com' })).not.toThrow();
+    expect(() => validateEnv({ ...production, JWT_SECRET: `replace_with_${'a'.repeat(30)}`, MAIL_TRANSPORT: 'resend', RESEND_API_KEY: 're_test_key', WEB_URL: 'https://app.example.com' })).toThrow(/placeholder/);
+    expect(() => validateEnv({ ...production, MAIL_TRANSPORT: 'resend', RESEND_API_KEY: 're_test_key', WEB_URL: 'http://app.example.com' })).toThrow(/https/);
+    expect(() => validateEnv({ ...production, MAIL_TRANSPORT: 'resend', RESEND_API_KEY: 're_test_key', WEB_URL: 'https://app.example.com' })).not.toThrow();
+  });
+
+  it('requires an API key whenever Resend is the mail transport', () => {
+    expect(() => validateEnv({ ...valid, MAIL_TRANSPORT: 'resend' })).toThrow(/RESEND_API_KEY/);
+    expect(() => validateEnv({ ...valid, MAIL_TRANSPORT: 'resend', RESEND_API_KEY: 're_test_key' })).not.toThrow();
   });
 });

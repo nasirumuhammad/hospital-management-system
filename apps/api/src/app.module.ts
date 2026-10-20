@@ -11,6 +11,7 @@ import { AuthModule } from "./auth/auth.module";
 import { DEFAULT_THROTTLE } from "./common/constants/auth.constants";
 import { EnvironmentVariables, validateEnv } from "./config/env.validation";
 import { DashboardModule } from "./dashboard/dashboard.module";
+import { buildDatabaseOptions } from "./database/database-options";
 import { DoctorsModule } from "./doctors/doctors.module";
 import { HealthController } from "./health/health.controller";
 import { InvoicesModule } from "./invoices/invoices.module";
@@ -64,10 +65,10 @@ const SERVER_ERROR_STATUS = 500;
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<EnvironmentVariables, true>) => ({
-        type: "postgres" as const,
-        username: "postgres",
-        password: "postgres",
-        database: "health_system",
+        ...buildDatabaseOptions({
+          DATABASE_URL: config.get("DATABASE_URL", { infer: true }),
+          DATABASE_SSL: config.get("DATABASE_SSL", { infer: true }),
+        }),
         autoLoadEntities: true,
         synchronize: false,
         migrationsRun: false,

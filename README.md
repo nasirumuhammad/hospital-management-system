@@ -87,5 +87,5 @@ All routes are under `/api`. Cookie-authenticated writes must come from an origi
 
 ## Deployment notes
 
-Read `docs/PRODUCTION-CHECKLIST.md` first. Essentials: serve web and API over HTTPS on the same registrable domain (cookies are `SameSite=Lax`, `Secure` in production), set `TRUST_PROXY`, real `JWT_SECRET`, SMTP settings, run `migration:run:prod` before starting the new API version, and remove `ADMIN_*` after the first start.
+Read `docs/PRODUCTION-CHECKLIST.md` first. Essentials: serve web and API over HTTPS on the same registrable domain (cookies are `SameSite=Lax`, `Secure` in production), set `TRUST_PROXY`, real `JWT_SECRET`, `MAIL_TRANSPORT=resend` with `RESEND_API_KEY` and `MAIL_FROM`, run `migration:run:prod` before starting the new API version, and remove `ADMIN_*` after the first start.
 `docs/LEGACY-MIGRATION.md` describes importing data from the original PHP/MySQL system, which needs its database dump and has not been performed.

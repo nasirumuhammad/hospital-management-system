@@ -18,7 +18,7 @@
 - [ ] PostgreSQL: dedicated least-privilege role, TLS (`DATABASE_SSL=true`), automated encrypted backups and a **tested restore**.
 - [ ] Secrets in a secret manager; rotate anything that was ever committed or shared.
 - [ ] HTTPS termination, `TRUST_PROXY` set to the real hop count, web and API on one registrable domain (or set `COOKIE_SAME_SITE` and `COOKIE_DOMAIN` deliberately).
-- [ ] SMTP provider configured and deliverability tested (SPF/DKIM). Decide whether to set `REQUIRE_EMAIL_VERIFICATION=true`.
+- [ ] Resend sending domain verified (SPF/DKIM) and deliverability tested. Decide whether to set `REQUIRE_EMAIL_VERIFICATION=true`.
 - [ ] Log shipping, alerting and retention for the audit log; an incident-response process.
 - [ ] Confirm Nigeria Data Protection Act obligations (lawful basis, consent, retention/deletion, breach notification) with qualified counsel or your data-protection officer.
 - [ ] Dependency and container vulnerability scanning; penetration test before go-live.

@@ -1,0 +1,74 @@
+services:
+  # ---------- NestJS API ----------
+  - type: web
+    name: carepoint-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render routes traffic to $PORT; keep the two in step.
+      - key: PORT
+        value: "4000"
+      - key: API_PORT
+        value: "4000"
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL
+        fromDatabase:
+          name: carepoint-db
+          property: connectionString
+      # The internal connection string stays on Render's private network: no TLS needed.
+      - key: DATABASE_SSL
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
+      # Public URL of the WEB service, e.g. https://carepoint-web.onrender.com (no trailing slash).
+      - key: WEB_ORIGIN
+        sync: false
+      - key: WEB_URL
+        sync: false
+      # First administrator, created on startup when no account has this e-mail.
+      - key: ADMIN_NAME
+        value: System Administrator
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD # at least 12 characters
+        sync: false
+      # Production refuses MAIL_TRANSPORT=console. Mail goes out through Resend; MAIL_FROM must use
+      # a domain verified in Resend, e.g. CarePoint <no-reply@yourdomain.com>.
+      - key: MAIL_TRANSPORT
+        value: resend
+      - key: MAIL_FROM
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+
+  # ---------- Next.js web ----------
+  - type: web
+    name: carepoint-web
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./apps/web/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      # Public URL of the API including the /api prefix, e.g. https://carepoint-api.onrender.com/api
+      # Read at runtime by the Next server (Server Components and the /api proxy).
+      - key: API_INTERNAL_URL
+        sync: false
+
+databases:
+  - name: carepoint-db
+    plan: free
+    region: oregon
+    databaseName: carepoint
+    user: carepoint

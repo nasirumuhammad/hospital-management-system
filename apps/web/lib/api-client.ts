@@ -1,4 +1,6 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api';
+import { resolvePublicApiUrl } from './api-base-url';
+
+const API_URL = resolvePublicApiUrl();
 const UNAUTHORIZED = 401;
 const NO_REFRESH_PATHS = ['/auth/login', '/auth/refresh', '/auth/logout', '/auth/forgot-password', '/auth/reset-password', '/auth/verify-email'];
 

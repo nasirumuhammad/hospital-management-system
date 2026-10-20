@@ -15,4 +15,9 @@ async function bootstrap(): Promise<void> {
   await app.listen(config.get('API_PORT', { infer: true }), '0.0.0.0');
 }
 
-void bootstrap();
+// With bufferLogs the pino logger may never flush if startup fails, so report
+// the failure on stderr directly instead of dying silently.
+bootstrap().catch((error: unknown) => {
+  console.error('API failed to start', error);
+  process.exit(1);
+});

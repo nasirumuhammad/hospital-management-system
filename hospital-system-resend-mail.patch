@@ -1,0 +1,516 @@
+diff --git a/.env.example b/.env.example
+index 98bc5c0..b76e06e 100644
+--- a/.env.example
++++ b/.env.example
+@@ -35,14 +35,11 @@ ADMIN_NAME=System Administrator
+ ADMIN_EMAIL=admin@example.com
+ ADMIN_PASSWORD=change-me-to-a-long-password
+ 
+-# Mail. "console" prints links to the log (development only); production requires smtp.
++# Mail, sent through Resend (https://resend.com). "console" prints links to the API log
++# (development only); production requires "resend" and a verified sending domain.
+ MAIL_TRANSPORT=console
+ MAIL_FROM=CarePoint <no-reply@carepoint.local>
+-# SMTP_HOST=
+-SMTP_PORT=587
+-# SMTP_USER=
+-# SMTP_PASSWORD=
+-SMTP_SECURE=false
++# RESEND_API_KEY=re_xxxxxxxx
+ REQUIRE_EMAIL_VERIFICATION=false
+ 
+ # ---- Web app (apps/web/.env.local) ----
+diff --git a/README.md b/README.md
+index 231ae33..a4e98e3 100644
+--- a/README.md
++++ b/README.md
+@@ -87,5 +87,5 @@ All routes are under `/api`. Cookie-authenticated writes must come from an origi
+ 
+ ## Deployment notes
+ 
+-Read `docs/PRODUCTION-CHECKLIST.md` first. Essentials: serve web and API over HTTPS on the same registrable domain (cookies are `SameSite=Lax`, `Secure` in production), set `TRUST_PROXY`, real `JWT_SECRET`, SMTP settings, run `migration:run:prod` before starting the new API version, and remove `ADMIN_*` after the first start.
++Read `docs/PRODUCTION-CHECKLIST.md` first. Essentials: serve web and API over HTTPS on the same registrable domain (cookies are `SameSite=Lax`, `Secure` in production), set `TRUST_PROXY`, real `JWT_SECRET`, `MAIL_TRANSPORT=resend` with `RESEND_API_KEY` and `MAIL_FROM`, run `migration:run:prod` before starting the new API version, and remove `ADMIN_*` after the first start.
+ `docs/LEGACY-MIGRATION.md` describes importing data from the original PHP/MySQL system, which needs its database dump and has not been performed.
+diff --git a/apps/api/package.json b/apps/api/package.json
+index 363e1c3..383d3d5 100644
+--- a/apps/api/package.json
++++ b/apps/api/package.json
+@@ -32,11 +32,11 @@
+     "dotenv": "^16.4.7",
+     "helmet": "^8.1.0",
+     "nestjs-pino": "^4.4.0",
+-    "nodemailer": "^6.10.1",
+     "pg": "^8.14.1",
+     "pino": "^9.7.0",
+     "pino-http": "^10.5.0",
+     "reflect-metadata": "^0.2.2",
++    "resend": "^6.34.1",
+     "rxjs": "^7.8.2",
+     "typeorm": "^0.3.21"
+   },
+@@ -49,7 +49,6 @@
+     "@types/express": "^5.0.0",
+     "@types/jest": "^29.5.14",
+     "@types/node": "^22.13.10",
+-    "@types/nodemailer": "^6.4.17",
+     "@types/supertest": "^6.0.2",
+     "jest": "^29.7.0",
+     "pino-pretty": "^13.0.0",
+diff --git a/apps/api/src/common/constants/mail.constants.ts b/apps/api/src/common/constants/mail.constants.ts
+new file mode 100644
+index 0000000..daeba95
+--- /dev/null
++++ b/apps/api/src/common/constants/mail.constants.ts
+@@ -0,0 +1 @@
++export const RESEND_CLIENT = Symbol('RESEND_CLIENT');
+diff --git a/apps/api/src/config/env.validation.spec.ts b/apps/api/src/config/env.validation.spec.ts
+index 2fb6cab..a56185a 100644
+--- a/apps/api/src/config/env.validation.spec.ts
++++ b/apps/api/src/config/env.validation.spec.ts
+@@ -26,8 +26,13 @@ describe('validateEnv', () => {
+   it('refuses unsafe production settings', () => {
+     const production = { ...valid, NODE_ENV: 'production' };
+     expect(() => validateEnv(production)).toThrow(/MAIL_TRANSPORT/);
+-    expect(() => validateEnv({ ...production, JWT_SECRET: `replace_with_${'a'.repeat(30)}`, MAIL_TRANSPORT: 'smtp', SMTP_HOST: 'smtp.example.com', WEB_URL: 'https://app.example.com' })).toThrow(/placeholder/);
+-    expect(() => validateEnv({ ...production, MAIL_TRANSPORT: 'smtp', SMTP_HOST: 'smtp.example.com', WEB_URL: 'http://app.example.com' })).toThrow(/https/);
+-    expect(() => validateEnv({ ...production, MAIL_TRANSPORT: 'smtp', SMTP_HOST: 'smtp.example.com', WEB_URL: 'https://app.example.com' })).not.toThrow();
++    expect(() => validateEnv({ ...production, JWT_SECRET: `replace_with_${'a'.repeat(30)}`, MAIL_TRANSPORT: 'resend', RESEND_API_KEY: 're_test_key', WEB_URL: 'https://app.example.com' })).toThrow(/placeholder/);
++    expect(() => validateEnv({ ...production, MAIL_TRANSPORT: 'resend', RESEND_API_KEY: 're_test_key', WEB_URL: 'http://app.example.com' })).toThrow(/https/);
++    expect(() => validateEnv({ ...production, MAIL_TRANSPORT: 'resend', RESEND_API_KEY: 're_test_key', WEB_URL: 'https://app.example.com' })).not.toThrow();
++  });
++
++  it('requires an API key whenever Resend is the mail transport', () => {
++    expect(() => validateEnv({ ...valid, MAIL_TRANSPORT: 'resend' })).toThrow(/RESEND_API_KEY/);
++    expect(() => validateEnv({ ...valid, MAIL_TRANSPORT: 'resend', RESEND_API_KEY: 're_test_key' })).not.toThrow();
+   });
+ });
+diff --git a/apps/api/src/config/env.validation.ts b/apps/api/src/config/env.validation.ts
+index a671a54..aa64f00 100644
+--- a/apps/api/src/config/env.validation.ts
++++ b/apps/api/src/config/env.validation.ts
+@@ -89,31 +89,21 @@ export class EnvironmentVariables {
+   @Transform(toBoolean) @IsBoolean() REQUIRE_EMAIL_VERIFICATION: boolean =
+     false;
+ 
+-  @IsIn(["smtp", "console"])
+-  MAIL_TRANSPORT: "smtp" | "console" = "console";
++  @IsIn(["resend", "console"])
++  MAIL_TRANSPORT: "resend" | "console" = "console";
+ 
+   @IsString()
+   MAIL_FROM: string = "CarePoint <no-reply@carepoint.local>";
+ 
+   @IsOptional()
+   @IsString()
+-  SMTP_HOST?: string;
+-
+-  @Type(() => Number)
+-  @IsInt()
+-  SMTP_PORT: number = 587;
+-
+-  @IsOptional()
+-  @IsString()
+-  SMTP_USER?: string;
+-
+-  @IsOptional()
+-  @IsString()
+-  SMTP_PASSWORD?: string;
++  RESEND_API_KEY?: string;
++}
+ 
+-  @Transform(toBoolean)
+-  @IsBoolean()
+-  SMTP_SECURE: boolean = false;
++function mailProblems(env: EnvironmentVariables): string[] {
++  if (env.MAIL_TRANSPORT === "resend" && !env.RESEND_API_KEY)
++    return ["RESEND_API_KEY is required when MAIL_TRANSPORT=resend"];
++  return [];
+ }
+ 
+ function productionProblems(env: EnvironmentVariables): string[] {
+@@ -121,10 +111,8 @@ function productionProblems(env: EnvironmentVariables): string[] {
+   const problems: string[] = [];
+   if (env.JWT_SECRET.startsWith(PLACEHOLDER_PREFIX))
+     problems.push("JWT_SECRET is still the placeholder value");
+-  if (env.MAIL_TRANSPORT !== "smtp")
+-    problems.push('MAIL_TRANSPORT must be "smtp" in production');
+-  if (env.MAIL_TRANSPORT === "smtp" && !env.SMTP_HOST)
+-    problems.push("SMTP_HOST is required when MAIL_TRANSPORT=smtp");
++  if (env.MAIL_TRANSPORT !== "resend")
++    problems.push('MAIL_TRANSPORT must be "resend" in production');
+   if (!env.WEB_URL.startsWith("https://"))
+     problems.push("WEB_URL must use https in production");
+   return problems;
+@@ -139,6 +127,7 @@ export function validateEnv(
+   const errors = validateSync(env, { skipMissingProperties: false });
+   const problems = [
+     ...errors.map((error) => Object.values(error.constraints ?? {}).join(", ")),
++    ...mailProblems(env),
+     ...productionProblems(env),
+   ];
+   if (problems.length > 0)
+diff --git a/apps/api/src/mail/mail.module.ts b/apps/api/src/mail/mail.module.ts
+index 216de64..248c8ee 100644
+--- a/apps/api/src/mail/mail.module.ts
++++ b/apps/api/src/mail/mail.module.ts
+@@ -1,5 +1,23 @@
+ import { Module } from '@nestjs/common';
++import { ConfigService } from '@nestjs/config';
++import { Resend } from 'resend';
++import { RESEND_CLIENT } from '../common/constants/mail.constants';
++import { EnvironmentVariables } from '../config/env.validation';
+ import { MailService } from './mail.service';
+ 
+-@Module({ providers: [MailService], exports: [MailService] })
++@Module({
++  providers: [
++    MailService,
++    {
++      provide: RESEND_CLIENT,
++      inject: [ConfigService],
++      // No client in console mode; env validation guarantees the key when MAIL_TRANSPORT=resend.
++      useFactory: (config: ConfigService<EnvironmentVariables, true>): Resend | null =>
++        config.get('MAIL_TRANSPORT', { infer: true }) === 'resend'
++          ? new Resend(config.get('RESEND_API_KEY', { infer: true }))
++          : null,
++    },
++  ],
++  exports: [MailService],
++})
+ export class MailModule {}
+diff --git a/apps/api/src/mail/mail.service.spec.ts b/apps/api/src/mail/mail.service.spec.ts
+new file mode 100644
+index 0000000..1575176
+--- /dev/null
++++ b/apps/api/src/mail/mail.service.spec.ts
+@@ -0,0 +1,38 @@
++import { ConfigService } from '@nestjs/config';
++import type { Resend } from 'resend';
++import { MailService } from './mail.service';
++
++const FROM = 'CarePoint <no-reply@carepoint.test>';
++const MAIL = { to: 'pat@example.com', name: 'Pat', link: 'https://app.example.com/reset-password?token=abc' };
++
++function build(resend: Resend | null) {
++  const config = { get: () => FROM } as unknown as ConfigService<never, true>;
++  return new MailService(resend, config);
++}
++
++function fakeResend(result: unknown) {
++  const send = jest.fn().mockImplementation(() => (result instanceof Error ? Promise.reject(result) : Promise.resolve(result)));
++  return { client: { emails: { send } } as unknown as Resend, send };
++}
++
++describe('MailService', () => {
++  it('sends the rendered message through Resend from the configured sender', async () => {
++    const { client, send } = fakeResend({ data: { id: '1' }, error: null });
++    await build(client).sendPasswordReset(MAIL);
++    expect(send).toHaveBeenCalledWith(expect.objectContaining({ from: FROM, to: MAIL.to, subject: 'Reset your CarePoint password' }));
++  });
++
++  it('does not throw when Resend reports an error, so recovery responses stay identical', async () => {
++    const { client } = fakeResend({ data: null, error: { name: 'validation_error', message: 'bad' } });
++    await expect(build(client).sendEmailVerification(MAIL)).resolves.toBeUndefined();
++  });
++
++  it('does not throw when the request itself fails', async () => {
++    const { client } = fakeResend(new Error('network down'));
++    await expect(build(client).sendPasswordReset(MAIL)).resolves.toBeUndefined();
++  });
++
++  it('only logs in console mode and never calls a provider', async () => {
++    await expect(build(null).sendPasswordReset(MAIL)).resolves.toBeUndefined();
++  });
++});
+diff --git a/apps/api/src/mail/mail.service.ts b/apps/api/src/mail/mail.service.ts
+index 3096062..e0eb7b8 100644
+--- a/apps/api/src/mail/mail.service.ts
++++ b/apps/api/src/mail/mail.service.ts
+@@ -1,7 +1,8 @@
+-import { Injectable, Logger } from '@nestjs/common';
++import { Inject, Injectable, Logger } from '@nestjs/common';
+ import { ConfigService } from '@nestjs/config';
+-import { createTransport, Transporter } from 'nodemailer';
++import { Resend } from 'resend';
+ import { EMAIL_VERIFICATION_TTL_HOURS, PASSWORD_RESET_TTL_MINUTES } from '../common/constants/auth.constants';
++import { RESEND_CLIENT } from '../common/constants/mail.constants';
+ import { EnvironmentVariables } from '../config/env.validation';
+ import { ActionLinkMail, MailMessage } from './mail.types';
+ import { renderActionLinkMail } from './templates/action-link.template';
+@@ -9,21 +10,13 @@ import { renderActionLinkMail } from './templates/action-link.template';
+ @Injectable()
+ export class MailService {
+   private readonly logger = new Logger(MailService.name);
+-  private readonly transport: Transporter;
+   private readonly from: string;
+-  private readonly isConsoleTransport: boolean;
+ 
+-  constructor(config: ConfigService<EnvironmentVariables, true>) {
++  constructor(
++    @Inject(RESEND_CLIENT) private readonly resend: Resend | null,
++    config: ConfigService<EnvironmentVariables, true>,
++  ) {
+     this.from = config.get('MAIL_FROM', { infer: true });
+-    this.isConsoleTransport = config.get('MAIL_TRANSPORT', { infer: true }) === 'console';
+-    this.transport = this.isConsoleTransport
+-      ? createTransport({ jsonTransport: true })
+-      : createTransport({
+-          host: config.get('SMTP_HOST', { infer: true }),
+-          port: config.get('SMTP_PORT', { infer: true }),
+-          secure: config.get('SMTP_SECURE', { infer: true }),
+-          auth: this.smtpAuth(config),
+-        });
+   }
+ 
+   async sendPasswordReset(mail: ActionLinkMail): Promise<void> {
+@@ -46,19 +39,19 @@ export class MailService {
+     }));
+   }
+ 
++  // Delivery failures are logged, never thrown: callers (forgot-password) must respond identically
++  // whether or not an account exists, so a provider error cannot surface to the client.
+   private async deliver(message: MailMessage): Promise<void> {
++    if (!this.resend) return this.logConsoleMail(message);
+     try {
+-      await this.transport.sendMail({ from: this.from, ...message });
+-      if (this.isConsoleTransport) this.logger.log(`Console mail transport (development only):\n${message.text}`);
+-    } catch (error) {
+-      const failure = error as { name?: string; code?: string };
+-      this.logger.error(`Email delivery failed (${failure.name ?? 'Error'} ${failure.code ?? ''})`.trim());
++      const { error } = await this.resend.emails.send({ from: this.from, ...message });
++      if (error) this.logger.error(`Email delivery failed (${error.name})`);
++    } catch (failure) {
++      this.logger.error(`Email delivery failed (${failure instanceof Error ? failure.name : 'Error'})`);
+     }
+   }
+ 
+-  private smtpAuth(config: ConfigService<EnvironmentVariables, true>) {
+-    const user = config.get('SMTP_USER', { infer: true });
+-    const pass = config.get('SMTP_PASSWORD', { infer: true });
+-    return user && pass ? { user, pass } : undefined;
++  private logConsoleMail(message: MailMessage): void {
++    this.logger.log(`Console mail transport (development only):\n${message.text}`);
+   }
+ }
+diff --git a/docs/PRODUCTION-CHECKLIST.md b/docs/PRODUCTION-CHECKLIST.md
+index 6ba554f..6574b8d 100644
+--- a/docs/PRODUCTION-CHECKLIST.md
++++ b/docs/PRODUCTION-CHECKLIST.md
+@@ -18,7 +18,7 @@
+ - [ ] PostgreSQL: dedicated least-privilege role, TLS (`DATABASE_SSL=true`), automated encrypted backups and a **tested restore**.
+ - [ ] Secrets in a secret manager; rotate anything that was ever committed or shared.
+ - [ ] HTTPS termination, `TRUST_PROXY` set to the real hop count, web and API on one registrable domain (or set `COOKIE_SAME_SITE` and `COOKIE_DOMAIN` deliberately).
+-- [ ] SMTP provider configured and deliverability tested (SPF/DKIM). Decide whether to set `REQUIRE_EMAIL_VERIFICATION=true`.
++- [ ] Resend sending domain verified (SPF/DKIM) and deliverability tested. Decide whether to set `REQUIRE_EMAIL_VERIFICATION=true`.
+ - [ ] Log shipping, alerting and retention for the audit log; an incident-response process.
+ - [ ] Confirm Nigeria Data Protection Act obligations (lawful basis, consent, retention/deletion, breach notification) with qualified counsel or your data-protection officer.
+ - [ ] Dependency and container vulnerability scanning; penetration test before go-live.
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index e6fd8a4..e9697de 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -59,9 +59,6 @@ importers:
+       nestjs-pino:
+         specifier: ^4.4.0
+         version: 4.6.1(@nestjs/common@11.2.7(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(pino-http@10.5.0)(pino@9.14.0)(rxjs@7.8.2)
+-      nodemailer:
+-        specifier: ^6.10.1
+-        version: 6.10.1
+       pg:
+         specifier: ^8.14.1
+         version: 8.23.1
+@@ -74,6 +71,9 @@ importers:
+       reflect-metadata:
+         specifier: ^0.2.2
+         version: 0.2.2
++      resend:
++        specifier: ^6.34.1
++        version: 6.34.1
+       rxjs:
+         specifier: ^7.8.2
+         version: 7.8.2
+@@ -105,9 +105,6 @@ importers:
+       '@types/node':
+         specifier: ^22.13.10
+         version: 22.20.5
+-      '@types/nodemailer':
+-        specifier: ^6.4.17
+-        version: 6.4.24
+       '@types/supertest':
+         specifier: ^6.0.2
+         version: 6.0.3
+@@ -971,6 +968,9 @@ packages:
+   '@sqltools/formatter@1.2.5':
+     resolution: {integrity: sha512-Uy0+khmZqUrUGm5dmMqVlnvufZRSK0FbYzVgp0UMstm+F5+W2/jnEEQyc9vo1ZR/E5ZI/B1WjjoTqBqwJL6Krw==}
+ 
++  '@stablelib/base64@1.0.1':
++    resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
++
+   '@swc/helpers@0.5.15':
+     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
+ 
+@@ -1081,9 +1081,6 @@ packages:
+   '@types/node@22.20.5':
+     resolution: {integrity: sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA==}
+ 
+-  '@types/nodemailer@6.4.24':
+-    resolution: {integrity: sha512-Ww4u0rT9wQNXh4JiQaIwx3QWdcOFXzOjQA2zc+jtFYNmQiT4mIUqcDin51bDFdkzKubFnQCZNK7FIHlPKQ/q9w==}
+-
+   '@types/qs@6.15.1':
+     resolution: {integrity: sha512-GZHUBZR9hckSUhrxmp1nG6NwdpM9fCunJwyThLW1X3AyHgd9IlHb6VANpQQqDr2o/qQp6McZ3y/IA2rVzKzSbw==}
+ 
+@@ -1807,6 +1804,9 @@ packages:
+   fast-safe-stringify@2.1.1:
+     resolution: {integrity: sha512-W+KJc2dmILlPplD/H4K9l9LcAHAfPtP6BY84uVLXQ6Evcz9Lcg33Y2z1IVblT6xdY54PXYVHEv+0Wpq8Io6zkA==}
+ 
++  fast-sha256@1.3.0:
++    resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
++
+   fast-uri@3.1.8:
+     resolution: {integrity: sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==}
+ 
+@@ -2537,10 +2537,6 @@ packages:
+     resolution: {integrity: sha512-5qr2okC4ItAI0hG5SaV0HoYMpnM/Y6+Oqr7AmPYy/2uEoGvS+GbSKLeRxSS1uAdu59yz0ouzcuXievSgg///WA==}
+     engines: {node: '>=18'}
+ 
+-  nodemailer@6.10.1:
+-    resolution: {integrity: sha512-Z+iLaBGVaSjbIzQ4pX6XV41HrooLsQ10ZWPUehGmuantvzWoDVBnmsdUcOIDM1t+yPor5pDhVlDESgOMEGxhHA==}
+-    engines: {node: '>=6.0.0'}
+-
+   nopt@5.0.0:
+     resolution: {integrity: sha512-Tbj67rffqceeLpcRXrT7vKAN8CwfPeIBgM7E6iBkmKLV7bEMwpGgYLGv0jACUsECaa/vuxP0IjEont6umdMgtQ==}
+     engines: {node: '>=6'}
+@@ -2727,6 +2723,9 @@ packages:
+     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
+     engines: {node: '>= 0.4'}
+ 
++  postal-mime@2.7.6:
++    resolution: {integrity: sha512-UUlyE2KlxmvwMGq060onF/VWU3zD6dVW31FwokQ5v26jWd35fbs2MoTFzh+jXnPwAyV2MULMKXcBInGOl5TO6Q==}
++
+   postcss@8.4.31:
+     resolution: {integrity: sha512-PS08Iboia9mts/2ygV3eLpY5ghnUcfLV/EXTOW1E2qYxJKGGBUtNjN76FYHnMs36RmARn41bC0AZmn+rR0OVpQ==}
+     engines: {node: ^10 || ^12 || >=14}
+@@ -2822,6 +2821,15 @@ packages:
+     resolution: {integrity: sha512-Xf0nWe6RseziFMu+Ap9biiUbmplq6S9/p+7w7YXP/JBHhrUDDUhwa+vANyubuqfZWTveU//DYVGsDG7RKL/vEw==}
+     engines: {node: '>=0.10.0'}
+ 
++  resend@6.34.1:
++    resolution: {integrity: sha512-3jo/j1WAW7CBkE6pzK4qLjZCfHRLIhY3ph3x/wzU+MN51cSw3EtReGce8S1cA1R0ipNDOdFYU5Lmt5r563lvYw==}
++    engines: {node: '>=20'}
++    peerDependencies:
++      '@react-email/render': '*'
++    peerDependenciesMeta:
++      '@react-email/render':
++        optional: true
++
+   resolve-cwd@3.0.0:
+     resolution: {integrity: sha512-OrZaX2Mb+rJCpH/6CpSqt9xFVpN++x01XnN2ie9g6P5/3xelLAkXWVADpdz1IHD/KFfEXyE6V0U01OQ3UO2rEg==}
+     engines: {node: '>=8'}
+@@ -3004,6 +3012,9 @@ packages:
+     resolution: {integrity: sha512-XlkWvfIm6RmsWtNJx+uqtKLS8eqFbxUg0ZzLXqY0caEy9l7hruX8IpiDnjsLavoBgqCCR71TqWO8MaXYheJ3RQ==}
+     engines: {node: '>=10'}
+ 
++  standardwebhooks@1.1.1:
++    resolution: {integrity: sha512-bCbX9ZEyFkWPsRz7Bl3NuQUJohmwGSev/yhr7vhaGPlc4AfIrspIRa6cPTBuI1ItmrTDJ4d/S2hCsfe4+vQGnQ==}
++
+   statuses@2.0.2:
+     resolution: {integrity: sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw==}
+     engines: {node: '>= 0.8'}
+@@ -4391,6 +4402,8 @@ snapshots:
+ 
+   '@sqltools/formatter@1.2.5': {}
+ 
++  '@stablelib/base64@1.0.1': {}
++
+   '@swc/helpers@0.5.15':
+     dependencies:
+       tslib: 2.8.1
+@@ -4521,10 +4534,6 @@ snapshots:
+     dependencies:
+       undici-types: 6.21.0
+ 
+-  '@types/nodemailer@6.4.24':
+-    dependencies:
+-      '@types/node': 22.20.5
+-
+   '@types/qs@6.15.1': {}
+ 
+   '@types/range-parser@1.2.7': {}
+@@ -5275,6 +5284,8 @@ snapshots:
+ 
+   fast-safe-stringify@2.1.1: {}
+ 
++  fast-sha256@1.3.0: {}
++
+   fast-uri@3.1.8: {}
+ 
+   fb-watchman@2.0.4:
+@@ -6169,8 +6180,6 @@ snapshots:
+ 
+   node-releases@2.0.59: {}
+ 
+-  nodemailer@6.10.1: {}
+-
+   nopt@5.0.0:
+     dependencies:
+       abbrev: 1.1.1
+@@ -6367,6 +6376,8 @@ snapshots:
+ 
+   possible-typed-array-names@1.1.0: {}
+ 
++  postal-mime@2.7.6: {}
++
+   postcss@8.4.31:
+     dependencies:
+       nanoid: 3.3.20
+@@ -6451,6 +6462,11 @@ snapshots:
+ 
+   require-from-string@2.0.2: {}
+ 
++  resend@6.34.1:
++    dependencies:
++      postal-mime: 2.7.6
++      standardwebhooks: 1.1.1
++
+   resolve-cwd@3.0.0:
+     dependencies:
+       resolve-from: 5.0.0
+@@ -6676,6 +6692,11 @@ snapshots:
+     dependencies:
+       escape-string-regexp: 2.0.0
+ 
++  standardwebhooks@1.1.1:
++    dependencies:
++      '@stablelib/base64': 1.0.1
++      fast-sha256: 1.3.0
++
+   statuses@2.0.2: {}
+ 
+   streamsearch@1.1.0: {}
+diff --git a/render.yaml b/render.yaml
+index 6d5a278..8f11d4f 100644
+--- a/render.yaml
++++ b/render.yaml
+@@ -39,18 +39,13 @@ services:
+         sync: false
+       - key: ADMIN_PASSWORD # at least 12 characters
+         sync: false
+-      # Production refuses MAIL_TRANSPORT=console, so an SMTP provider is required.
++      # Production refuses MAIL_TRANSPORT=console. Mail goes out through Resend; MAIL_FROM must use
++      # a domain verified in Resend, e.g. CarePoint <no-reply@yourdomain.com>.
+       - key: MAIL_TRANSPORT
+-        value: smtp
++        value: resend
+       - key: MAIL_FROM
+         sync: false
+-      - key: SMTP_HOST
+-        sync: false
+-      - key: SMTP_PORT
+-        value: "587"
+-      - key: SMTP_USER
+-        sync: false
+-      - key: SMTP_PASSWORD
++      - key: RESEND_API_KEY
+         sync: false
+ 
+   # ---------- Next.js web ----------
