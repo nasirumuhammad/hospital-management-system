@@ -5,7 +5,7 @@ A TypeScript monorepo: **NestJS** REST API, **Next.js** dashboard, **PostgreSQL*
 | | |
 |---|---|
 | `apps/api` | NestJS 11 + TypeORM, feature modules (`auth`, `users`, `patients`, `doctors`, `appointments`, `medical-records`, `prescriptions`, `invoices`, `audit`, `dashboard`, `mail`) |
-| `apps/web` | Next.js 15 (App Router) dashboard for admins, doctors and patients |
+| `apps/web` | Next.js 16 (App Router) dashboard for admins, doctors and patients |
 | `packages/types` | Response types shared with the web app |
 
 ## What it does

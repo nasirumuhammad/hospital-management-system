@@ -4,11 +4,11 @@ const ACCESS_COOKIE = 'cp_access';
 const PUBLIC_ROUTES = new Set(['/login', '/forgot-password', '/reset-password', '/verify-email']);
 
 /**
- * Next 15 only loads this file as `middleware.ts` (the `proxy.ts` name belongs to Next 16).
+ * Next 16 loads this file as `proxy.ts` (it was `middleware.ts` up to Next 15).
  * Navigation boundary only: API guards remain the source of truth for identity
  * and permissions. The proxy prevents anonymous users from entering the app shell.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublic = PUBLIC_ROUTES.has(pathname) || pathname.startsWith('/_next/') || pathname === '/favicon.ico';
   if (isPublic) return NextResponse.next();
