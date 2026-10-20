@@ -32,8 +32,8 @@ sudo -u postgres psql -c "CREATE USER healthcare_app WITH PASSWORD 'change_me';"
 sudo -u postgres psql -c "CREATE DATABASE healthcare_db OWNER healthcare_app;"
 
 # 2. configuration
-cp .env.example apps/api/.env          # edit secrets; see comments inside
-echo 'NEXT_PUBLIC_API_URL=http://localhost:4000/api' > apps/web/.env.local
+cp apps/api/.env.example apps/api/.env          # edit secrets; see comments inside
+cp apps/web/.env.example apps/web/.env.local
 
 # 3. install, migrate, run
 pnpm install
