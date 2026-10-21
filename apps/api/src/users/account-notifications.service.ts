@@ -4,7 +4,7 @@ import { UserTokenType } from '../common/enums/user-token-type.enum';
 import { EnvironmentVariables } from '../config/env.validation';
 import { MailService } from '../mail/mail.service';
 import { User } from './entities/user.entity';
-import { USER_TOKEN_LINK_PATH } from './user-token.constants';
+import { ACCOUNT_INVITATION_TTL_MS, INVITATION_LINK_PARAM, USER_TOKEN_LINK_PATH } from './user-token.constants';
 import { UserTokensService } from './user-tokens.service';
 
 type Recipient = Pick<User, 'id' | 'email' | 'name'>;
@@ -31,8 +31,17 @@ export class AccountNotificationsService {
     void this.mail.sendPasswordReset({ to: user.email, name: user.name, link });
   }
 
+  async sendAccountInvitation(user: Recipient): Promise<void> {
+    const token = await this.tokens.issue(user.id, UserTokenType.PASSWORD_RESET, ACCOUNT_INVITATION_TTL_MS);
+    const link = `${this.linkTo(UserTokenType.PASSWORD_RESET, token)}&${INVITATION_LINK_PARAM}`;
+    void this.mail.sendAccountInvitation({ to: user.email, name: user.name, link });
+  }
+
   private async linkFor(user: Recipient, type: UserTokenType): Promise<string> {
-    const token = await this.tokens.issue(user.id, type);
+    return this.linkTo(type, await this.tokens.issue(user.id, type));
+  }
+
+  private linkTo(type: UserTokenType, token: string): string {
     return `${this.webUrl}/${USER_TOKEN_LINK_PATH[type]}?token=${encodeURIComponent(token)}`;
   }
 }

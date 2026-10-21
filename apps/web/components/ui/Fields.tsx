@@ -5,6 +5,15 @@ interface BaseProps {
   defaultValue?: string | null;
 }
 
+export function Checkbox({ label, hint, name }: { label: string; hint?: string; name: string }) {
+  return (
+    <label className="check-field">
+      <input type="checkbox" name={name} />
+      <span>{label}{hint && <small>{hint}</small>}</span>
+    </label>
+  );
+}
+
 export function Field({ label, name, type = 'text', required = false, defaultValue, ...rest }: BaseProps & { type?: string } & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'defaultValue' | 'name' | 'type' | 'required'>) {
   return (
     <label className="field">

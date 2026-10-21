@@ -8,6 +8,7 @@ import { AdminBootstrapService } from './admin-bootstrap.service';
 import { User } from './entities/user.entity';
 import { UserToken } from './entities/user-token.entity';
 import { PasswordService } from './password.service';
+import { ProfileAccountService } from './profile-account.service';
 import { ProfileLinkService } from './profile-link.service';
 import { UserTokensRepository } from './user-tokens.repository';
 import { UserTokensService } from './user-tokens.service';
@@ -26,6 +27,7 @@ import { UsersService } from './users.service';
     UserTokensService,
     AccountNotificationsService,
     ProfileLinkService,
+    ProfileAccountService,
     AdminBootstrapService,
   ],
   exports: [UsersService, PasswordService, UserTokensService, AccountNotificationsService],

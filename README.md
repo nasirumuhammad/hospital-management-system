@@ -43,7 +43,7 @@ pnpm dev                               # web :3000, api :4000
 
 Sign in at http://localhost:3000 with `ADMIN_EMAIL` / `ADMIN_PASSWORD`. With `MAIL_TRANSPORT=console` (development), reset and verification links appear in the API log.
 
-First-time data entry: create doctor/patient records, create an account for each person (**Accounts → Add account**), then **Link profile** so the account sees its own data.
+First-time data entry: create the doctor/patient records. Tick **Give this person a login** when adding a record (or click **Create login** on its row later) and the person is emailed an invitation to choose their own password; the account is linked to the record automatically. **Accounts → Add account** remains for administrators and for accounts with an admin-set temporary password; use **Link profile** to attach those to a record by hand.
 
 ## Scripts
 

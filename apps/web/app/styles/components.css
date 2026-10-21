@@ -44,6 +44,10 @@
 
 /* ---------- Form controls ---------- */
 .field { display: grid; gap: 6px; margin-bottom: 16px; }
+.check-field { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px; cursor: pointer; }
+.check-field input { margin-top: 3px; }
+.check-field span { display: grid; gap: 2px; font-size: 13px; font-weight: 500; color: var(--foreground); }
+.check-field small { font-weight: 400; color: var(--muted-foreground, inherit); line-height: 1.4; }
 .field > span { font-size: 13px; font-weight: 500; color: var(--foreground); }
 
 .field input, .field select, .field textarea,

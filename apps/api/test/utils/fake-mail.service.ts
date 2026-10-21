@@ -1,6 +1,6 @@
 import { ActionLinkMail } from '../../src/mail/mail.types';
 
-export type SentMail = ActionLinkMail & { kind: 'password-reset' | 'email-verification' };
+export type SentMail = ActionLinkMail & { kind: 'password-reset' | 'email-verification' | 'account-invitation' };
 
 export class FakeMailService {
   readonly sent: SentMail[] = [];
@@ -11,6 +11,10 @@ export class FakeMailService {
 
   async sendEmailVerification(mail: ActionLinkMail): Promise<void> {
     this.sent.push({ ...mail, kind: 'email-verification' });
+  }
+
+  async sendAccountInvitation(mail: ActionLinkMail): Promise<void> {
+    this.sent.push({ ...mail, kind: 'account-invitation' });
   }
 
   tokenFor(to: string, kind: SentMail['kind']): string {

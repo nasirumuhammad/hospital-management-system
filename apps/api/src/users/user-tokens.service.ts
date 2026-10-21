@@ -8,10 +8,10 @@ import { UserTokensRepository } from './user-tokens.repository';
 export class UserTokensService {
   constructor(private readonly repository: UserTokensRepository) {}
 
-  async issue(userId: string, type: UserTokenType): Promise<string> {
+  async issue(userId: string, type: UserTokenType, ttlMs: number = USER_TOKEN_TTL_MS[type]): Promise<string> {
     await this.repository.invalidateOutstanding(userId, type);
     const rawToken = generateOpaqueToken();
-    const expiresAt = new Date(Date.now() + USER_TOKEN_TTL_MS[type]);
+    const expiresAt = new Date(Date.now() + ttlMs);
     await this.repository.insert({ userId, type, tokenHash: hashToken(rawToken), expiresAt });
     return rawToken;
   }

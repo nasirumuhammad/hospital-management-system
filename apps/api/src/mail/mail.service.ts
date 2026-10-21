@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
-import { EMAIL_VERIFICATION_TTL_HOURS, PASSWORD_RESET_TTL_MINUTES } from '../common/constants/auth.constants';
+import { ACCOUNT_INVITATION_TTL_HOURS, EMAIL_VERIFICATION_TTL_HOURS, PASSWORD_RESET_TTL_MINUTES } from '../common/constants/auth.constants';
 import { RESEND_CLIENT } from '../common/constants/mail.constants';
 import { EnvironmentVariables } from '../config/env.validation';
 import { ActionLinkMail, MailMessage } from './mail.types';
@@ -36,6 +36,16 @@ export class MailService {
       intro: `Confirm your email address using the link below. It expires in ${EMAIL_VERIFICATION_TTL_HOURS} hours.`,
       buttonLabel: 'Verify email address',
       footnote: 'If you were not expecting this, you can ignore this email.',
+    }));
+  }
+
+  async sendAccountInvitation(mail: ActionLinkMail): Promise<void> {
+    await this.deliver(renderActionLinkMail({
+      ...mail,
+      subject: 'You have been invited to CarePoint',
+      intro: `An administrator created a CarePoint account for you. Use the link below to choose your password. It expires in ${ACCOUNT_INVITATION_TTL_HOURS} hours and can be used once.`,
+      buttonLabel: 'Set your password',
+      footnote: 'If you were not expecting this, you can ignore this email; no one can sign in to the account until a password is set.',
     }));
   }
 

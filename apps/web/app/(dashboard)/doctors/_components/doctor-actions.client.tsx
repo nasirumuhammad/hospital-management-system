@@ -3,13 +3,15 @@ import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import type { Doctor } from '@healthcare/types';
 import { ErrorBanner } from '@/components/ui/Feedback';
-import { Field } from '@/components/ui/Fields';
+import { Checkbox, Field } from '@/components/ui/Fields';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal, ModalActions } from '@/components/ui/Modal';
-import { api, errorMessage } from '@/lib/api-client';
+import { api } from '@/lib/api-client';
 import { fullName } from '@/lib/format';
 import { readForm, toPayload } from '@/lib/form';
+import { createLoginFor, splitLoginChoice } from '@/lib/profile-login';
 import { useRefreshAction } from '@/lib/use-action';
+import { useProfileSave } from '@/lib/use-profile-save';
 
 const OPTIONAL_FIELDS = ['phone', 'qualification'];
 
@@ -39,10 +41,20 @@ export function DoctorRowActions({ doctor }: { doctor: Doctor }) {
     if (confirmed) await run(() => api(`/doctors/${doctor.id}`, { method: 'DELETE' }));
   }
 
+  async function createLogin() {
+    const confirmed = await confirmAction({
+      title: 'Create login',
+      message: `Create a login for Dr. ${fullName(doctor)} and email an invitation to ${doctor.email}?`,
+      confirmLabel: 'Send invitation',
+    });
+    if (confirmed) await run(() => createLoginFor('DOCTOR', doctor.id));
+  }
+
   return (
     <>
       <div className="row-actions">
         <button className="btn secondary small" onClick={() => setEditing(true)}>Edit</button>
+        {!doctor.userId && <button className="btn secondary small" onClick={() => void createLogin()}>Create login</button>}
         <button className="btn secondary small" onClick={() => void run(() => api(`/doctors/${doctor.id}`, { method: 'PATCH', body: { isActive: !doctor.isActive } }))}>{doctor.isActive ? 'Deactivate' : 'Activate'}</button>
         <button className="btn danger small" onClick={() => void removeDoctor()}>Remove</button>
       </div>
@@ -53,24 +65,19 @@ export function DoctorRowActions({ doctor }: { doctor: Doctor }) {
 }
 
 function DoctorModal({ doctor, onClose, onSaved }: { doctor: Doctor | null; onClose: () => void; onSaved: () => void }) {
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const { error, busy, partlySaved, save } = useProfileSave('Doctor', onSaved);
+  const close = partlySaved ? onSaved : onClose;
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const body = toPayload(readForm(event.currentTarget), OPTIONAL_FIELDS, doctor ? 'update' : 'create');
-    setBusy(true);
-    try {
-      await api(doctor ? `/doctors/${doctor.id}` : '/doctors', { method: doctor ? 'PATCH' : 'POST', body });
-      onSaved();
-    } catch (failure) {
-      setError(errorMessage(failure));
-      setBusy(false);
-    }
+    const { wantsLogin, recordValues } = splitLoginChoice(readForm(event.currentTarget));
+    const body = toPayload(recordValues, OPTIONAL_FIELDS, doctor ? 'update' : 'create');
+    const request = () => api<Doctor>(doctor ? `/doctors/${doctor.id}` : '/doctors', { method: doctor ? 'PATCH' : 'POST', body });
+    return save(request, wantsLogin ? (id) => createLoginFor('DOCTOR', id) : undefined);
   }
 
   return (
-    <Modal title={doctor ? 'Edit doctor' : 'Add doctor'} eyebrow={doctor ? 'UPDATE' : 'NEW RECORD'} onClose={onClose} onSubmit={submit}>
+    <Modal title={doctor ? 'Edit doctor' : 'Add doctor'} eyebrow={doctor ? 'UPDATE' : 'NEW RECORD'} onClose={close} onSubmit={submit}>
       <ErrorBanner message={error} />
       <div className="field-row">
         <Field label="First name" name="firstName" required defaultValue={doctor?.firstName} />
@@ -80,7 +87,8 @@ function DoctorModal({ doctor, onClose, onSaved }: { doctor: Doctor | null; onCl
       <Field label="Phone number" name="phone" defaultValue={doctor?.phone} />
       <Field label="Specialty" name="specialty" required defaultValue={doctor?.specialty} />
       <Field label="Qualification" name="qualification" defaultValue={doctor?.qualification} />
-      <ModalActions onCancel={onClose} submitLabel="Save doctor" busy={busy} />
+      {!doctor && <Checkbox name="createLogin" label="Give this person a login" hint="Creates an account with this email address and emails an invitation to choose a password." />}
+      <ModalActions onCancel={close} submitLabel="Save doctor" busy={busy || partlySaved} />
     </Modal>
   );
 }

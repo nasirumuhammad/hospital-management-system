@@ -56,10 +56,17 @@ export class UsersService {
       email: dto.email,
       name: dto.name,
       role: dto.role,
-      passwordHash: await this.passwords.hash(dto.password),
+      passwordHash: dto.password ? await this.passwords.hash(dto.password) : await this.passwords.hashUnusable(),
     });
-    await this.audit.record({ actorId: actor.id, action: AuditAction.USER_CREATED, targetType: AuditTarget.USER, targetId: user.id, metadata: { role: user.role } });
-    await this.notifications.sendEmailVerification(user);
+    await this.audit.record({
+      actorId: actor.id,
+      action: AuditAction.USER_CREATED,
+      targetType: AuditTarget.USER,
+      targetId: user.id,
+      metadata: { role: user.role, invited: !dto.password },
+    });
+    if (dto.password) await this.notifications.sendEmailVerification(user);
+    else await this.notifications.sendAccountInvitation(user);
     return toUserResponse(user);
   }
 

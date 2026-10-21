@@ -3,13 +3,15 @@ import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { GENDERS, type Patient } from '@healthcare/types';
 import { ErrorBanner } from '@/components/ui/Feedback';
-import { Field, Select, TextArea } from '@/components/ui/Fields';
+import { Checkbox, Field, Select, TextArea } from '@/components/ui/Fields';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal, ModalActions } from '@/components/ui/Modal';
-import { api, errorMessage } from '@/lib/api-client';
+import { api } from '@/lib/api-client';
 import { fullName } from '@/lib/format';
 import { readForm, toPayload } from '@/lib/form';
+import { createLoginFor, splitLoginChoice } from '@/lib/profile-login';
 import { useRefreshAction } from '@/lib/use-action';
+import { useProfileSave } from '@/lib/use-profile-save';
 
 const OPTIONAL_FIELDS = ['phone', 'dateOfBirth', 'gender', 'address'];
 
@@ -39,10 +41,20 @@ export function PatientRowActions({ patient }: { patient: Patient }) {
     if (confirmed) await run(() => api(`/patients/${patient.id}`, { method: 'DELETE' }));
   }
 
+  async function createLogin() {
+    const confirmed = await confirmAction({
+      title: 'Create login',
+      message: `Create a login for ${fullName(patient)} and email an invitation to ${patient.email}?`,
+      confirmLabel: 'Send invitation',
+    });
+    if (confirmed) await run(() => createLoginFor('PATIENT', patient.id));
+  }
+
   return (
     <>
       <div className="row-actions">
         <button className="btn secondary small" onClick={() => setEditing(true)}>Edit</button>
+        {!patient.userId && <button className="btn secondary small" onClick={() => void createLogin()}>Create login</button>}
         <button className="btn danger small" onClick={() => void removePatient()}>Remove</button>
       </div>
       <ErrorBanner message={error} onDismiss={() => setError('')} />
@@ -52,24 +64,19 @@ export function PatientRowActions({ patient }: { patient: Patient }) {
 }
 
 function PatientModal({ patient, onClose, onSaved }: { patient: Patient | null; onClose: () => void; onSaved: () => void }) {
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
+  const { error, busy, partlySaved, save } = useProfileSave('Patient', onSaved);
+  const close = partlySaved ? onSaved : onClose;
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const body = toPayload(readForm(event.currentTarget), OPTIONAL_FIELDS, patient ? 'update' : 'create');
-    setBusy(true);
-    try {
-      await api(patient ? `/patients/${patient.id}` : '/patients', { method: patient ? 'PATCH' : 'POST', body });
-      onSaved();
-    } catch (failure) {
-      setError(errorMessage(failure));
-      setBusy(false);
-    }
+    const { wantsLogin, recordValues } = splitLoginChoice(readForm(event.currentTarget));
+    const body = toPayload(recordValues, OPTIONAL_FIELDS, patient ? 'update' : 'create');
+    const request = () => api<Patient>(patient ? `/patients/${patient.id}` : '/patients', { method: patient ? 'PATCH' : 'POST', body });
+    return save(request, wantsLogin ? (id) => createLoginFor('PATIENT', id) : undefined);
   }
 
   return (
-    <Modal title={patient ? 'Edit patient' : 'Add patient'} eyebrow={patient ? 'UPDATE' : 'NEW RECORD'} onClose={onClose} onSubmit={submit}>
+    <Modal title={patient ? 'Edit patient' : 'Add patient'} eyebrow={patient ? 'UPDATE' : 'NEW RECORD'} onClose={close} onSubmit={submit}>
       <ErrorBanner message={error} />
       <div className="field-row">
         <Field label="First name" name="firstName" required defaultValue={patient?.firstName} />
@@ -82,7 +89,8 @@ function PatientModal({ patient, onClose, onSaved }: { patient: Patient | null; 
         <Field label="Date of birth" name="dateOfBirth" type="date" defaultValue={patient?.dateOfBirth} />
       </div>
       <TextArea label="Address" name="address" rows={2} defaultValue={patient?.address} />
-      <ModalActions onCancel={onClose} submitLabel="Save patient" busy={busy} />
+      {!patient && <Checkbox name="createLogin" label="Give this person a login" hint="Creates an account with this email address and emails an invitation to choose a password." />}
+      <ModalActions onCancel={close} submitLabel="Save patient" busy={busy || partlySaved} />
     </Modal>
   );
 }

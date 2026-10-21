@@ -3,10 +3,12 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
+import { CreateProfileAccountDto } from './dto/create-profile-account.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { LinkProfileDto } from './dto/link-profile.dto';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { SetActiveDto } from './dto/set-active.dto';
+import { ProfileAccountService } from './profile-account.service';
 import { ProfileLinkService } from './profile-link.service';
 import { UsersService } from './users.service';
 
@@ -16,6 +18,7 @@ export class UsersController {
   constructor(
     private readonly users: UsersService,
     private readonly profileLinks: ProfileLinkService,
+    private readonly profileAccounts: ProfileAccountService,
   ) {}
 
   @Get()
@@ -26,6 +29,11 @@ export class UsersController {
   @Post()
   create(@Body() dto: CreateUserDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.users.create(dto, actor);
+  }
+
+  @Post('from-profile')
+  createFromProfile(@Body() dto: CreateProfileAccountDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.profileAccounts.createLogin(dto, actor);
   }
 
   @Patch(':id/active')

@@ -22,6 +22,15 @@ describe('MailService', () => {
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ from: FROM, to: MAIL.to, subject: 'Reset your CarePoint password' }));
   });
 
+  it('sends the invitation with a set-your-password link and its lifetime', async () => {
+    const { client, send } = fakeResend({ data: { id: '1' }, error: null });
+    await build(client).sendAccountInvitation(MAIL);
+    const sent = send.mock.calls[0][0];
+    expect(sent).toMatchObject({ from: FROM, to: MAIL.to, subject: 'You have been invited to CarePoint' });
+    expect(sent.text).toContain(MAIL.link);
+    expect(sent.text).toContain('72 hours');
+  });
+
   it('does not throw when Resend reports an error, so recovery responses stay identical', async () => {
     const { client } = fakeResend({ data: null, error: { name: 'validation_error', message: 'bad' } });
     await expect(build(client).sendEmailVerification(MAIL)).resolves.toBeUndefined();

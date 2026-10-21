@@ -9,6 +9,7 @@ export const REFRESH_COOKIE_PATH = '/api/auth';
 
 export const PASSWORD_RESET_TTL_MINUTES = 30;
 export const EMAIL_VERIFICATION_TTL_HOURS = 48;
+export const ACCOUNT_INVITATION_TTL_HOURS = 72;
 export const OPAQUE_TOKEN_BYTES = 48;
 
 export const MS_PER_MINUTE = 60_000;
