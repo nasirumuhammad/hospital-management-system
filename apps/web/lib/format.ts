@@ -9,8 +9,8 @@ const EVENING_HOUR = 18;
 export const initials = (name: string): string =>
   name.split(' ').filter(Boolean).map((part) => part[0]).join('').slice(0, INITIALS_LENGTH).toUpperCase();
 
-export const fullName = (person?: { firstName: string; lastName: string } | null): string =>
-  person ? `${person.firstName} ${person.lastName}` : 'Unknown';
+export const fullName = (person?: { firstName: string; lastName: string; middleName?: string | null } | null): string =>
+  person ? [person.firstName, person.middleName, person.lastName].filter(Boolean).join(' ') : 'Unknown';
 
 export const formatDate = (iso: string): string =>
   new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short', year: 'numeric', timeZone: TIME_ZONE });

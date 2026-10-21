@@ -20,24 +20,24 @@ const SORTABLE: SortMap = {
 export class DoctorsRepository {
   constructor(@InjectRepository(Doctor) private readonly repository: Repository<Doctor>) {}
 
-  findById(id: string): Promise<Doctor | null> {
-    return this.repository.findOneBy({ id });
+  findById(id: string, hospitalId: string): Promise<Doctor | null> {
+    return this.repository.findOneBy({ id, hospitalId });
   }
 
-  findActiveById(id: string): Promise<Doctor | null> {
-    return this.repository.findOneBy({ id, isActive: true });
+  findActiveById(id: string, hospitalId: string): Promise<Doctor | null> {
+    return this.repository.findOneBy({ id, hospitalId, isActive: true });
   }
 
-  findByUserId(userId: string): Promise<Doctor | null> {
-    return this.repository.findOneBy({ userId });
+  findByUserId(userId: string, hospitalId: string): Promise<Doctor | null> {
+    return this.repository.findOneBy({ userId, hospitalId });
   }
 
-  existsByUserId(userId: string): Promise<boolean> {
-    return this.repository.existsBy({ userId });
+  existsByUserId(userId: string, hospitalId: string): Promise<boolean> {
+    return this.repository.existsBy({ userId, hospitalId });
   }
 
-  countActive(): Promise<number> {
-    return this.repository.countBy({ isActive: true });
+  countActive(hospitalId: string): Promise<number> {
+    return this.repository.countBy({ isActive: true, hospitalId });
   }
 
   create(data: Partial<Doctor>): Doctor {
@@ -48,13 +48,13 @@ export class DoctorsRepository {
     return this.repository.save(doctor);
   }
 
-  async softDelete(id: string): Promise<void> {
-    await this.repository.update({ id }, { isActive: false });
-    await this.repository.softDelete({ id });
+  async softDelete(id: string, hospitalId: string): Promise<void> {
+    await this.repository.update({ id, hospitalId }, { isActive: false });
+    await this.repository.softDelete({ id, hospitalId });
   }
 
-  search(query: ListDoctorsQueryDto, includeInactive: boolean): Promise<PaginatedResult<Doctor>> {
-    const builder = this.repository.createQueryBuilder('doctor');
+  search(query: ListDoctorsQueryDto, includeInactive: boolean, hospitalId: string): Promise<PaginatedResult<Doctor>> {
+    const builder = this.repository.createQueryBuilder('doctor').where('doctor.hospitalId = :hospitalId', { hospitalId });
     if (!includeInactive) builder.andWhere('doctor.isActive = true');
     if (query.q) {
       builder.andWhere(

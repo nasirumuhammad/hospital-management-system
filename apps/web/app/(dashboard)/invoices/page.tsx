@@ -18,7 +18,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams: Pag
 
   return (
     <>
-      <PageHeader title="Invoices" description="Billing and payments." extra={user.role === 'ADMIN' && <CreateInvoiceButton />} />
+      <PageHeader title="Invoices" description="Billing and payments." extra={['ADMIN','CASHIER'].includes(user.role) && <CreateInvoiceButton />} />
       <ListPanel title="Invoices" description={`${data.total.toLocaleString('en-US')} invoices`}>
         <InvoicesTable data={data} sort={sort} />
       </ListPanel>

@@ -9,6 +9,7 @@ import { ListPrescriptionsQueryDto } from './dto/list-prescriptions-query.dto';
 import { Prescription } from './entities/prescription.entity';
 
 export interface PrescriptionScope {
+  hospitalId: string;
   patientUserId?: string;
   doctorUserId?: string;
 }
@@ -64,7 +65,8 @@ export class PrescriptionsRepository {
       .leftJoin('p.patient', 'patient')
       .addSelect(PATIENT_COLUMNS)
       .leftJoin('p.doctor', 'doctor')
-      .addSelect(DOCTOR_COLUMNS);
+      .addSelect(DOCTOR_COLUMNS)
+      .andWhere('p.hospitalId = :hospitalId', { hospitalId: scope.hospitalId });
     if (scope.patientUserId) builder.andWhere('patient.userId = :patientUserId', { patientUserId: scope.patientUserId });
     if (scope.doctorUserId) builder.andWhere('doctor.userId = :doctorUserId', { doctorUserId: scope.doctorUserId });
     return builder;

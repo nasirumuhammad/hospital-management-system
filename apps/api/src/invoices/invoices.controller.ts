@@ -9,7 +9,7 @@ import { RecordPaymentDto } from './dto/record-payment.dto';
 import { InvoicesService } from './invoices.service';
 
 @Controller('invoices')
-@Roles(UserRole.ADMIN, UserRole.PATIENT)
+@Roles(UserRole.ADMIN, UserRole.PATIENT, UserRole.CASHIER, UserRole.HMO_DESK)
 export class InvoicesController {
   constructor(private readonly invoices: InvoicesService) {}
 
@@ -24,13 +24,13 @@ export class InvoicesController {
   }
 
   @Post()
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.CASHIER)
   create(@Body() dto: CreateInvoiceDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.invoices.create(dto, actor);
   }
 
   @Post(':id/payments')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.CASHIER)
   recordPayment(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RecordPaymentDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.invoices.recordPayment(id, dto, actor);
   }

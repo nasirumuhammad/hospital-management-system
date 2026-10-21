@@ -6,6 +6,7 @@ export interface AuthenticatedUser {
   email: string;
   name: string;
   role: UserRole;
+  hospitalId: string | null;
 }
 
 export type AuthenticatedRequest = Request & { user: AuthenticatedUser };

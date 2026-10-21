@@ -5,6 +5,9 @@ import { UserRole } from '../../common/enums/user-role.enum';
 @Entity('staff_users')
 @Unique('UQ_staff_users_email', ['email'])
 export class User extends AbstractEntity {
+  @Column({ type: 'uuid', nullable: true })
+  hospitalId: string | null;
+
   @Column({ type: 'varchar', length: 180 })
   email: string;
 

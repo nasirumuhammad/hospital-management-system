@@ -276,3 +276,32 @@ tbody tr:last-child td { border-bottom: 0; }
 .combobox-empty:empty { display: none; }
 .combobox-label { padding: 6px 10px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
 .combobox-separator { height: 1px; margin: 4px 0; background: var(--border); }
+
+.operation-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; padding: 0 20px 20px; align-items: end; }
+.operation-form label { display: grid; gap: 6px; color: var(--muted-foreground); font-size: 12px; font-weight: 600; }
+.operation-form input, .operation-form select, .inline-operation-form input { width: 100%; min-width: 0; min-height: 38px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); color: var(--foreground); font: inherit; }
+.inline-operation-form { display: flex; flex-wrap: wrap; gap: 6px; min-width: 280px; }
+.inline-operation-form input { flex: 1 1 90px; min-height: 32px; padding: 5px 8px; font-size: 12px; }
+.form-error { grid-column: 1 / -1; color: var(--destructive); font-size: 12px; margin: 0; }
+.table-scroll { width: 100%; overflow-x: auto; }
+.table-scroll table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table-scroll th, .table-scroll td { padding: 12px 14px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; vertical-align: middle; }
+.table-scroll th { color: var(--muted-foreground); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.table-scroll tbody tr:last-child td { border-bottom: 0; }
+
+.print-document { color: #111; background: #fff; min-height: 100vh; padding: 24px; }
+.print-actions { display: flex; justify-content: flex-end; margin: 0 auto 16px; max-width: 850px; }
+.patient-card-print, .receipt-print, .lab-report-print { color: #111; background: #fff; border: 1px solid #ddd; padding: 24px; max-width: 850px; margin: 0 auto; }
+.patient-card-print header, .receipt-print header, .lab-report-print header { text-align: center; margin-bottom: 20px; }
+.patient-card-print h1, .receipt-print h1, .lab-report-print h1 { font-size: 22px; margin: 0 0 4px; }
+.patient-card-print h2, .receipt-print h2, .lab-report-print h2 { font-size: 16px; letter-spacing: .08em; margin: 14px 0 6px; }
+.patient-card-print p, .receipt-print p, .lab-report-print p { margin: 5px 0; font-size: 13px; }
+.patient-card-details, .lab-report-patient { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin: 20px 0; }
+.patient-card-details div, .lab-report-patient div { display: grid; gap: 4px; }
+.patient-card-details small, .lab-report-patient small { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .04em; }
+.patient-card-details strong, .lab-report-patient strong { font-size: 13px; }
+.patient-card-barcode { max-width: 420px; margin: 16px auto; }
+.patient-card-print footer, .receipt-print footer, .lab-report-print footer { border-top: 1px solid #ddd; margin-top: 24px; padding-top: 12px; text-align: center; font-size: 11px; }
+.receipt-print { max-width: 380px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.receipt-total { display: flex; justify-content: space-between; gap: 12px; font-size: 18px; margin: 20px 0; }
+@media print { body * { visibility: hidden !important; } .print-document, .print-document * { visibility: visible !important; } .print-document { position: absolute; inset: 0; padding: 0; width: 100%; min-height: 0; } .print-actions { display: none !important; } .patient-card-print, .receipt-print, .lab-report-print { border: 0; padding: 8mm; max-width: none; margin: 0; } .receipt-print { width: 80mm; padding: 4mm; } .table-scroll { overflow: visible; } .table-scroll table { white-space: normal; } }

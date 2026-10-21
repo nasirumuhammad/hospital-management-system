@@ -6,6 +6,9 @@ import { Invoice } from './invoice.entity';
 @Entity('payments')
 @Index('IDX_payments_invoice', ['invoiceId'])
 export class Payment {
+  @Column({ type: 'uuid' })
+  hospitalId: string;
+
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

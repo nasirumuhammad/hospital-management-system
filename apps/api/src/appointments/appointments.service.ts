@@ -38,14 +38,14 @@ export class AppointmentsService {
 
   async create(dto: CreateAppointmentDto, user: AuthenticatedUser): Promise<Appointment> {
     const patient = await this.resolvePatient(dto, user);
-    const doctor = await this.doctors.findActiveOrFail(dto.doctorId);
+    const doctor = await this.doctors.findActiveOrFail(dto.doctorId, user);
     const scheduledAt = this.parseFutureDate(dto.scheduledAt);
-    await this.assertSlotFree(doctor.id, scheduledAt);
+    await this.assertSlotFree(doctor.id, scheduledAt, user);
     const saved = await this.repository.save(
-      this.repository.create({ patientId: patient.id, doctorId: doctor.id, scheduledAt, reason: dto.reason ?? null, status: AppointmentStatus.PENDING }),
+      this.repository.create({ hospitalId: this.requireHospital(user), patientId: patient.id, doctorId: doctor.id, scheduledAt, reason: dto.reason ?? null, status: AppointmentStatus.PENDING }),
     );
     await this.record(AuditAction.APPOINTMENT_CREATED, user, saved.id, { patientId: patient.id, doctorId: doctor.id });
-    return this.findScopedOrFail(saved.id, {});
+    return this.findScopedOrFail(saved.id, { hospitalId: this.requireHospital(user) });
   }
 
   async updateStatus(id: string, status: AppointmentStatus, user: AuthenticatedUser): Promise<Appointment> {
@@ -59,18 +59,18 @@ export class AppointmentsService {
   }
 
   async reschedule(id: string, dto: RescheduleAppointmentDto, user: AuthenticatedUser): Promise<Appointment> {
-    const appointment = await this.findScopedOrFail(id, {});
+    const appointment = await this.findScopedOrFail(id, this.scopeFor(user));
     if (!isOpen(appointment.status)) throw new BadRequestException('Only pending or confirmed appointments can be rescheduled');
     const scheduledAt = this.parseFutureDate(dto.scheduledAt);
-    await this.assertSlotFree(appointment.doctorId, scheduledAt, appointment.id);
-    await this.repository.update(id, { scheduledAt, reason: dto.reason ?? appointment.reason });
+    await this.assertSlotFree(appointment.doctorId, scheduledAt, user, appointment.id);
+    await this.repository.update(id, this.requireHospital(user), { scheduledAt, reason: dto.reason ?? appointment.reason });
     await this.record(AuditAction.APPOINTMENT_RESCHEDULED, user, id, { scheduledAt: scheduledAt.toISOString() });
-    return this.findScopedOrFail(id, {});
+    return this.findScopedOrFail(id, this.scopeFor(user));
   }
 
   async remove(id: string, user: AuthenticatedUser): Promise<void> {
-    await this.findScopedOrFail(id, {});
-    await this.repository.softDelete(id);
+    await this.findScopedOrFail(id, this.scopeFor(user));
+    await this.repository.softDelete(id, this.requireHospital(user));
     await this.record(AuditAction.APPOINTMENT_DELETED, user, id);
   }
 
@@ -79,9 +79,9 @@ export class AppointmentsService {
       throw new BadRequestException(`An appointment that is ${appointment.status.toLowerCase()} cannot become ${next.toLowerCase()}`);
     }
     const previous = appointment.status;
-    await this.repository.update(appointment.id, { status: next });
+    await this.repository.update(appointment.id, this.requireHospital(user), { status: next });
     await this.record(AuditAction.APPOINTMENT_STATUS_CHANGED, user, appointment.id, { from: previous, to: next });
-    return this.findScopedOrFail(appointment.id, {});
+    return this.findScopedOrFail(appointment.id, this.scopeFor(user));
   }
 
   private async findScopedOrFail(id: string, scope: AppointmentScope): Promise<Appointment> {
@@ -91,9 +91,9 @@ export class AppointmentsService {
   }
 
   private async resolvePatient(dto: CreateAppointmentDto, user: AuthenticatedUser) {
-    if (user.role === UserRole.PATIENT) return this.patients.findByUserIdOrFail(user.id);
+    if (user.role === UserRole.PATIENT) return this.patients.findByUserIdOrFail(user.id, user);
     if (!dto.patientId) throw new BadRequestException('patientId is required');
-    return this.patients.findOrFail(dto.patientId);
+    return this.patients.findOrFail(dto.patientId, user);
   }
 
   private parseFutureDate(value: string): Date {
@@ -104,19 +104,25 @@ export class AppointmentsService {
     return date;
   }
 
-  private async assertSlotFree(doctorId: string, scheduledAt: Date, excludeId?: string): Promise<void> {
-    if (await this.repository.existsOverlapping(doctorId, conflictWindow(scheduledAt), excludeId)) {
+  private async assertSlotFree(doctorId: string, scheduledAt: Date, user: AuthenticatedUser, excludeId?: string): Promise<void> {
+    if (await this.repository.existsOverlapping(doctorId, this.requireHospital(user), conflictWindow(scheduledAt), excludeId)) {
       throw new ConflictException('The doctor already has an appointment around that time');
     }
   }
 
   private scopeFor(user: AuthenticatedUser): AppointmentScope {
-    if (user.role === UserRole.PATIENT) return { patientUserId: user.id };
-    if (user.role === UserRole.DOCTOR) return { doctorUserId: user.id };
-    return {};
+    const hospitalId = this.requireHospital(user);
+    if (user.role === UserRole.PATIENT) return { hospitalId, patientUserId: user.id };
+    if (user.role === UserRole.DOCTOR) return { hospitalId, doctorUserId: user.id };
+    return { hospitalId };
+  }
+
+  private requireHospital(user: AuthenticatedUser): string {
+    if (!user.hospitalId) throw new NotFoundException('A hospital must be selected for this operation');
+    return user.hospitalId;
   }
 
   private record(action: AuditAction, user: AuthenticatedUser, targetId: string, metadata?: Record<string, unknown>) {
-    return this.audit.record({ actorId: user.id, action, targetType: AuditTarget.APPOINTMENT, targetId, metadata });
+    return this.audit.record({ hospitalId: this.requireHospital(user), actorId: user.id, action, targetType: AuditTarget.APPOINTMENT, targetId, metadata });
   }
 }

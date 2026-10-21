@@ -1,5 +1,6 @@
 'use client';
 import type { ColumnDef } from '@tanstack/react-table';
+import Link from 'next/link';
 import { GENDERS, type Paginated, type Patient } from '@healthcare/types';
 import { DataTable } from '@/components/ui/DataTable';
 import { PersonCell } from '@/components/ui/Page';
@@ -17,6 +18,7 @@ export function PatientsTable({ data, sort, isAdmin }: { data: Paginated<Patient
     { id: 'phone', header: 'Phone', enableSorting: true, cell: ({ row }) => row.original.phone || '—' },
     { id: 'gender', header: 'Gender', enableSorting: true, cell: ({ row }) => row.original.gender || '—' },
     { id: 'dateOfBirth', header: 'Date of birth', enableSorting: true, cell: ({ row }) => row.original.dateOfBirth || '—' },
+    { id: 'card', header: 'Patient card', enableHiding: false, cell: ({ row }) => <Link className="btn secondary small" href={`/print/patient-card/${row.original.id}`} target="_blank">Print card</Link> },
     ...(isAdmin ? [{ id: 'actions', header: 'Actions', enableHiding: false, cell: ({ row }) => <PatientRowActions patient={row.original} /> } satisfies ColumnDef<Patient>] : []),
   ];
   return (

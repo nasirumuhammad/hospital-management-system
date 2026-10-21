@@ -13,7 +13,7 @@ import { createLoginFor, splitLoginChoice } from '@/lib/profile-login';
 import { useRefreshAction } from '@/lib/use-action';
 import { useProfileSave } from '@/lib/use-profile-save';
 
-const OPTIONAL_FIELDS = ['phone', 'dateOfBirth', 'gender', 'address'];
+const OPTIONAL_FIELDS = ['email', 'dateOfBirth', 'address', 'middleName', 'nextOfKinName', 'nextOfKinPhone', 'nextOfKinRelationship'];
 
 export function AddPatientButton() {
   const [open, setOpen] = useState(false);
@@ -54,7 +54,7 @@ export function PatientRowActions({ patient }: { patient: Patient }) {
     <>
       <div className="row-actions">
         <button className="btn secondary small" onClick={() => setEditing(true)}>Edit</button>
-        {!patient.userId && <button className="btn secondary small" onClick={() => void createLogin()}>Create login</button>}
+        {!patient.userId && patient.email && <button className="btn secondary small" onClick={() => void createLogin()}>Create login</button>}
         <button className="btn danger small" onClick={() => void removePatient()}>Remove</button>
       </div>
       <ErrorBanner message={error} onDismiss={() => setError('')} />
@@ -82,14 +82,17 @@ function PatientModal({ patient, onClose, onSaved }: { patient: Patient | null; 
         <Field label="First name" name="firstName" required defaultValue={patient?.firstName} />
         <Field label="Last name" name="lastName" required defaultValue={patient?.lastName} />
       </div>
-      <Field label="Email address" name="email" type="email" required defaultValue={patient?.email} />
-      <Field label="Phone number" name="phone" defaultValue={patient?.phone} />
+      <Field label="Email address (optional)" name="email" type="email" defaultValue={patient?.email} />
+      <Field label="Phone number" name="phone" required defaultValue={patient?.phone} />
+      <Field label="Middle name (optional)" name="middleName" defaultValue={patient?.middleName} />
       <div className="field-row">
-        <Select label="Gender" name="gender" placeholder="Select gender" defaultValue={patient?.gender} options={GENDERS.map((g) => ({ value: g, label: g }))} />
+        <Select label="Gender" name="gender" placeholder="Select gender" required defaultValue={patient?.gender} options={GENDERS.map((g) => ({ value: g, label: g }))} />
         <Field label="Date of birth" name="dateOfBirth" type="date" defaultValue={patient?.dateOfBirth} />
       </div>
       <TextArea label="Address" name="address" rows={2} defaultValue={patient?.address} />
-      {!patient && <Checkbox name="createLogin" label="Give this person a login" hint="Creates an account with this email address and emails an invitation to choose a password." />}
+      <div className="field-row"><Field label="Next of kin" name="nextOfKinName" defaultValue={patient?.nextOfKinName} /><Field label="Next of kin phone" name="nextOfKinPhone" defaultValue={patient?.nextOfKinPhone} /></div>
+      <Field label="Next of kin relationship" name="nextOfKinRelationship" defaultValue={patient?.nextOfKinRelationship} />
+      {!patient && <Checkbox name="createLogin" label="Give this person a login" hint="Requires an email address. Creates an account with it and emails an invitation to choose a password." />}
       <ModalActions onCancel={close} submitLabel="Save patient" busy={busy || partlySaved} />
     </Modal>
   );

@@ -7,4 +7,5 @@ export enum AuditTarget {
   PRESCRIPTION = 'prescription',
   INVOICE = 'invoice',
   PAYMENT = 'payment',
+  HOSPITAL = 'hospital',
 }

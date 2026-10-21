@@ -4,6 +4,7 @@ import { UserResponse } from '../users/user.mapper';
 export interface JwtPayload {
   sub: string;
   tv: number;
+  hospitalId: string | null;
 }
 
 export interface SessionTokens {

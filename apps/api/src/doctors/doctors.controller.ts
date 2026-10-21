@@ -18,8 +18,8 @@ export class DoctorsController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.doctors.findOrFail(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.doctors.findOrFail(id, user);
   }
 
   @Post()

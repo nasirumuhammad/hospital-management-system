@@ -14,10 +14,12 @@ import { DashboardModule } from "./dashboard/dashboard.module";
 import { buildDatabaseOptions } from "./database/database-options";
 import { DoctorsModule } from "./doctors/doctors.module";
 import { HealthController } from "./health/health.controller";
+import { HospitalsModule } from "./hospitals/hospitals.module";
 import { InvoicesModule } from "./invoices/invoices.module";
 import { MedicalRecordsModule } from "./medical-records/medical-records.module";
 import { PatientsModule } from "./patients/patients.module";
 import { PrescriptionsModule } from "./prescriptions/prescriptions.module";
+import { OperationsModule } from "./operations/operations.module";
 import { UsersModule } from "./users/users.module";
 
 const HTTP_ERROR_STATUS = 400;
@@ -87,6 +89,8 @@ const SERVER_ERROR_STATUS = 500;
     PrescriptionsModule,
     InvoicesModule,
     DashboardModule,
+    HospitalsModule,
+    OperationsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

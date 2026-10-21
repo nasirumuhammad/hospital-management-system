@@ -8,7 +8,7 @@ type AuthStatus = 'authenticated' | 'anonymous';
 interface AuthContextValue {
   user: SessionUser | null;
   status: AuthStatus;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<SessionUser>;
   logout: () => Promise<void>;
   setUser: (user: SessionUser) => void;
 }
@@ -34,9 +34,10 @@ export function AuthProvider({ children, initialUser = null }: { children: React
     return () => setSessionExpiredHandler(null);
   }, [clearSession]);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string): Promise<SessionUser> => {
     const result = await api<{ user: SessionUser }>('/auth/login', { method: 'POST', body: { email, password } });
     setUser(result.user);
+    return result.user;
   }, [setUser]);
 
   const logout = useCallback(async () => {

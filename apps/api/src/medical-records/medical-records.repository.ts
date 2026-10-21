@@ -9,6 +9,7 @@ import { ListMedicalRecordsQueryDto } from './dto/list-medical-records-query.dto
 import { MedicalRecord } from './entities/medical-record.entity';
 
 export interface RecordScope {
+  hospitalId: string;
   patientUserId?: string;
   doctorUserId?: string;
 }
@@ -35,12 +36,12 @@ export class MedicalRecordsRepository {
     return this.repository.save(record);
   }
 
-  async update(id: string, changes: Partial<MedicalRecord>): Promise<void> {
-    await this.repository.update({ id }, changes);
+  async update(id: string, hospitalId: string, changes: Partial<MedicalRecord>): Promise<void> {
+    await this.repository.update({ id, hospitalId }, changes);
   }
 
-  findPlainById(id: string): Promise<MedicalRecord | null> {
-    return this.repository.findOneBy({ id });
+  findPlainById(id: string, hospitalId: string): Promise<MedicalRecord | null> {
+    return this.repository.findOneBy({ id, hospitalId });
   }
 
   findOneScoped(id: string, scope: RecordScope): Promise<MedicalRecord | null> {
@@ -69,7 +70,8 @@ export class MedicalRecordsRepository {
       .leftJoin('r.patient', 'patient')
       .addSelect(PATIENT_COLUMNS)
       .leftJoin('r.doctor', 'doctor')
-      .addSelect(DOCTOR_COLUMNS);
+      .addSelect(DOCTOR_COLUMNS)
+      .andWhere('r.hospitalId = :hospitalId', { hospitalId: scope.hospitalId });
     if (scope.patientUserId) builder.andWhere('patient.userId = :patientUserId', { patientUserId: scope.patientUserId });
     if (scope.doctorUserId) builder.andWhere('doctor.userId = :doctorUserId', { doctorUserId: scope.doctorUserId });
     return builder;

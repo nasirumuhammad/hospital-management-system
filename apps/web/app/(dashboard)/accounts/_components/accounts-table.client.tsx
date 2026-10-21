@@ -8,7 +8,7 @@ import type { SortSpec } from '@/lib/search-params';
 import { AccountRowActions } from './account-actions.client';
 import { ACCOUNT_SORTABLE, ACCOUNT_DEFAULT_SORT } from './accounts-table.config';
 
-const ROLE_OPTIONS = USER_ROLES.map((value) => ({ value, label: titleCase(value) }));
+const ROLE_OPTIONS = USER_ROLES.filter((value) => value !== 'SUPER_ADMIN').map((value) => ({ value, label: titleCase(value) }));
 
 export function AccountsTable({ data, sort, selfId }: { data: Paginated<SessionUser>; sort: SortSpec; selfId: string }) {
   const columns: ColumnDef<SessionUser>[] = [

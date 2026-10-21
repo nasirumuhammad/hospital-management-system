@@ -14,6 +14,10 @@ import { Patient } from '../../patients/entities/patient.entity';
 })
 export class Appointment extends AbstractEntity {
   @Column({ type: 'uuid' })
+  hospitalId: string;
+
+
+  @Column({ type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient, { nullable: false, onDelete: 'RESTRICT' })

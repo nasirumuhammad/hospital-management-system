@@ -13,11 +13,13 @@ export class MedicalRecordsController {
   constructor(private readonly records: MedicalRecordsService) {}
 
   @Get()
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.PATIENT)
   list(@Query() query: ListMedicalRecordsQueryDto, @CurrentUser() user: AuthenticatedUser) {
     return this.records.list(query, user);
   }
 
   @Get(':id')
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.PATIENT)
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.records.findOne(id, user);
   }

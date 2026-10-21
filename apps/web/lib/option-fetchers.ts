@@ -31,3 +31,19 @@ export function recordOptionsFetcher(patientId: string) {
     return result.items.map((record) => ({ value: record.id, label: record.diagnosis, description: formatDate(record.createdAt) }));
   };
 }
+
+export async function fetchDrugOptions(term: string): Promise<ComboOption[]> {
+  const result = await api<Drug[]>('/pharmacy/drugs', { query: { q: term || undefined } });
+  return result.map((drug) => ({ value: drug.id, label: drug.genericName, description: [drug.brandName, drug.strength, `${drug.availableStock} ${drug.dispensingUnit ?? 'units'} available`].filter(Boolean).join(' · ') }));
+}
+
+export async function fetchVisitOptions(term: string): Promise<ComboOption[]> {
+  const visits = await api<Visit[]>('/visits', { query: { q: term || undefined } });
+  return visits.map((visit) => ({ value: visit.id, label: `Queue #${visit.visitNumber} · ${[visit.firstName, visit.middleName, visit.lastName].filter(Boolean).join(' ')}`, description: `${visit.hospitalNumber} · ${visit.status.replaceAll('_', ' ')}` }));
+}
+
+export async function fetchBedOptions(term: string): Promise<ComboOption[]> {
+  type BedOption = { id: string; bedNumber: string; wardName: string; status: string };
+  const beds = await api<BedOption[]>('/inpatient/beds');
+  return beds.filter((bed) => `${bed.wardName} ${bed.bedNumber} ${bed.status} ${bed.id}`.toLowerCase().includes(term.toLowerCase())).map((bed) => ({ value: bed.id, label: `${bed.wardName} · ${bed.bedNumber}`, description: `${bed.status} · ${bed.id}` }));
+}

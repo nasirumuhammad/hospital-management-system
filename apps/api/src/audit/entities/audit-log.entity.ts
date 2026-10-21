@@ -5,6 +5,9 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 
 @Index('IDX_audit_logs_actor', ['actorId'])
 @Index('IDX_audit_logs_target', ['targetType', 'targetId'])
 export class AuditLog {
+  @Column({ type: 'uuid' })
+  hospitalId: string;
+
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

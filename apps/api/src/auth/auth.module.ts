@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ACCESS_TOKEN_ISSUER, JWT_ALGORITHM } from '../common/constants/auth.constants';
 import { EnvironmentVariables } from '../config/env.validation';
 import { UsersModule } from '../users/users.module';
+import { Hospital } from '../hospitals/entities/hospital.entity';
 import { AccessTokenService } from './access-token.service';
 import { AuthCookieService } from './auth-cookie.service';
 import { AuthController } from './auth.controller';
@@ -19,7 +20,7 @@ import { SessionService } from './session.service';
 @Module({
   imports: [
     UsersModule,
-    TypeOrmModule.forFeature([RefreshToken]),
+    TypeOrmModule.forFeature([RefreshToken, Hospital]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<EnvironmentVariables, true>) => ({

@@ -28,7 +28,7 @@ export class DashboardService {
   async summary(user: AuthenticatedUser): Promise<DashboardSummary> {
     const now = new Date();
     const [doctors, appointments, pendingAppointments, upcomingAppointments] = await Promise.all([
-      this.doctors.countActive(),
+      this.doctors.countActive(user),
       this.appointments.count(user),
       this.appointments.count(user, { status: AppointmentStatus.PENDING }),
       this.appointments.count(user, { upcomingFrom: now }),
@@ -38,7 +38,7 @@ export class DashboardService {
       appointments,
       pendingAppointments,
       upcomingAppointments,
-      ...(user.role !== UserRole.PATIENT && { patients: await this.patients.count() }),
+      ...(user.role !== UserRole.PATIENT && { patients: await this.patients.count(user) }),
       ...(user.role !== UserRole.DOCTOR && { outstandingInvoices: await this.invoices.countOutstanding(user) }),
     };
   }

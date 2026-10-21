@@ -7,6 +7,9 @@ import { Patient } from '../../patients/entities/patient.entity';
 @Index('IDX_prescriptions_patient', ['patientId'])
 @Index('IDX_prescriptions_doctor', ['doctorId'])
 export class Prescription {
+  @Column({ type: 'uuid' })
+  hospitalId: string;
+
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -45,6 +48,15 @@ export class Prescription {
 
   @Column({ type: 'text', nullable: true })
   instructions: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  drugId: string | null;
+
+  @Column({ type: 'integer', nullable: true })
+  quantityPrescribed: number | null;
+
+  @Column({ type: 'varchar', length: 20, default: 'PENDING' })
+  status: 'PENDING' | 'PARTIAL' | 'DISPENSED' | 'CANCELLED';
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

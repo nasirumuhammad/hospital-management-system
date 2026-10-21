@@ -12,11 +12,13 @@ export class PrescriptionsController {
   constructor(private readonly prescriptions: PrescriptionsService) {}
 
   @Get()
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT, UserRole.PHARMACIST)
   list(@Query() query: ListPrescriptionsQueryDto, @CurrentUser() user: AuthenticatedUser) {
     return this.prescriptions.list(query, user);
   }
 
   @Get(':id')
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT, UserRole.PHARMACIST)
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.prescriptions.findOne(id, user);
   }

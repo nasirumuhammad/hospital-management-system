@@ -22,8 +22,8 @@ export class UsersController {
   ) {}
 
   @Get()
-  list(@Query() query: ListUsersQueryDto) {
-    return this.users.list(query);
+  list(@Query() query: ListUsersQueryDto, @CurrentUser() actor: AuthenticatedUser) {
+    return this.users.list(query, actor);
   }
 
   @Post()

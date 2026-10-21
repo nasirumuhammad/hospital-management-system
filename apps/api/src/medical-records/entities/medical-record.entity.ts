@@ -9,6 +9,10 @@ import { Patient } from '../../patients/entities/patient.entity';
 @Index('IDX_medical_records_doctor', ['doctorId'])
 export class MedicalRecord extends AbstractEntity {
   @Column({ type: 'uuid' })
+  hospitalId: string;
+
+
+  @Column({ type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient, { nullable: false, onDelete: 'RESTRICT' })
@@ -21,6 +25,9 @@ export class MedicalRecord extends AbstractEntity {
   @ManyToOne(() => Doctor, { nullable: false, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'doctorId', foreignKeyConstraintName: 'FK_medical_records_doctor' })
   doctor: Doctor;
+
+  @Column({ type: 'uuid', nullable: true })
+  visitId: string | null;
 
   @Column({ type: 'uuid', nullable: true })
   appointmentId: string | null;

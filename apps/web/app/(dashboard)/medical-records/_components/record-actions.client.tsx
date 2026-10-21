@@ -9,10 +9,10 @@ import { Modal, ModalActions } from '@/components/ui/Modal';
 import { api, errorMessage } from '@/lib/api-client';
 import { fullName } from '@/lib/format';
 import { readForm, toPayload } from '@/lib/form';
-import { fetchPatientOptions } from '@/lib/option-fetchers';
+import { fetchPatientOptions, fetchVisitOptions } from '@/lib/option-fetchers';
 import { useRefreshAction } from '@/lib/use-action';
 
-const OPTIONAL_FIELDS = ['allergies', 'treatmentPlan'];
+const OPTIONAL_FIELDS = ['allergies', 'treatmentPlan', 'visitId'];
 
 export function NewRecordButton() {
   const [open, setOpen] = useState(false);
@@ -71,6 +71,7 @@ function RecordModal({ record, onClose, onSaved }: { record: MedicalRecord | nul
     <Modal title={record ? 'Edit record' : 'New medical record'} eyebrow="CLINICAL" onClose={onClose} onSubmit={submit} wide>
       <ErrorBanner message={error} />
       {!record && <ComboboxField label="Patient" name="patientId" required placeholder="Search by name, email, phone or ID" fetchOptions={fetchPatientOptions} />}
+      {!record && <ComboboxField label="Visit (optional)" name="visitId" placeholder="Link to a visit" fetchOptions={fetchVisitOptions} />}
       <Field label="Diagnosis" name="diagnosis" required defaultValue={record?.diagnosis} />
       <TextArea label="Clinical notes" name="notes" required rows={5} defaultValue={record?.notes} />
       <TextArea label="Allergies" name="allergies" rows={2} defaultValue={record?.allergies} />

@@ -51,8 +51,8 @@ export class UsersRepository {
     return this.repository.save(this.repository.create(data));
   }
 
-  search(query: ListUsersQueryDto): Promise<PaginatedResult<User>> {
-    const builder = this.repository.createQueryBuilder('user');
+  search(query: ListUsersQueryDto, hospitalId: string): Promise<PaginatedResult<User>> {
+    const builder = this.repository.createQueryBuilder('user').where('user.hospitalId = :hospitalId', { hospitalId });
     if (query.role) builder.andWhere('user.role = :role', { role: query.role });
     if (query.q) {
       builder.andWhere('(user.name ILIKE :pattern OR user.email ILIKE :pattern)', { pattern: toContainsPattern(query.q) });
@@ -61,16 +61,16 @@ export class UsersRepository {
     return paginate(builder, query);
   }
 
-  async setActive(id: string, isActive: boolean): Promise<void> {
-    await this.repository.update({ id }, { isActive });
+  async setActive(id: string, hospitalId: string, isActive: boolean): Promise<void> {
+    await this.repository.update({ id, hospitalId }, { isActive });
   }
 
-  async incrementTokenVersion(id: string): Promise<void> {
-    await this.repository.update({ id }, { tokenVersion: INCREMENT_TOKEN_VERSION });
+  async incrementTokenVersion(id: string, hospitalId?: string): Promise<void> {
+    await this.repository.update(hospitalId ? { id, hospitalId } : { id }, { tokenVersion: INCREMENT_TOKEN_VERSION });
   }
 
-  async replacePassword(id: string, passwordHash: string): Promise<void> {
-    await this.repository.update({ id }, { passwordHash, tokenVersion: INCREMENT_TOKEN_VERSION });
+  async replacePassword(id: string, passwordHash: string, hospitalId?: string): Promise<void> {
+    await this.repository.update(hospitalId ? { id, hospitalId } : { id }, { passwordHash, tokenVersion: INCREMENT_TOKEN_VERSION });
   }
 
   async markEmailVerified(id: string): Promise<void> {

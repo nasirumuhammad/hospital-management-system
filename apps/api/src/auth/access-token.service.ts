@@ -8,8 +8,8 @@ import { JwtPayload } from './auth.types';
 export class AccessTokenService {
   constructor(private readonly jwt: JwtService) {}
 
-  sign(user: Pick<User, 'id' | 'tokenVersion'>): Promise<string> {
-    const payload: JwtPayload = { sub: user.id, tv: user.tokenVersion };
+  sign(user: Pick<User, 'id' | 'tokenVersion' | 'hospitalId'>): Promise<string> {
+    const payload: JwtPayload = { sub: user.id, tv: user.tokenVersion, hospitalId: user.hospitalId };
     return this.jwt.signAsync(payload);
   }
 

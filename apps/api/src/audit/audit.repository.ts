@@ -21,8 +21,8 @@ export class AuditRepository {
     return this.repository.save(this.repository.create(entry));
   }
 
-  search(query: ListAuditLogsQueryDto): Promise<PaginatedResult<AuditLog>> {
-    const builder = this.repository.createQueryBuilder('log');
+  search(query: ListAuditLogsQueryDto, hospitalId: string): Promise<PaginatedResult<AuditLog>> {
+    const builder = this.repository.createQueryBuilder('log').where('log.hospitalId = :hospitalId', { hospitalId });
     if (query.action) builder.andWhere('log.action = :action', { action: query.action });
     if (query.targetType) builder.andWhere('log.targetType = :targetType', { targetType: query.targetType });
     if (query.actorId) builder.andWhere('log.actorId = :actorId', { actorId: query.actorId });

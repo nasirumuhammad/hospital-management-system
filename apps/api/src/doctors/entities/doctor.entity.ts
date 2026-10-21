@@ -3,9 +3,13 @@ import { AbstractEntity } from '../../common/entities/abstract.entity';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('doctors')
-@Index('UQ_doctors_email_active', ['email'], { unique: true, where: '"deletedAt" IS NULL' })
+@Index('UQ_doctors_hospital_email', ['hospitalId', 'email'], { unique: true, where: '"deletedAt" IS NULL' })
 @Index('UQ_doctors_userId_active', ['userId'], { unique: true, where: '"deletedAt" IS NULL' })
 export class Doctor extends AbstractEntity {
+  @Column({ type: 'uuid' })
+  hospitalId: string;
+
+
   @Column({ type: 'varchar', length: 100 })
   firstName: string;
 

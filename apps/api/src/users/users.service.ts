@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../common/enums/audit-action.enum';
 import { AuditTarget } from '../common/enums/audit-target.enum';
+import { UserRole } from '../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 import { AccountNotificationsService } from './account-notifications.service';
@@ -20,6 +21,11 @@ export class UsersService {
     private readonly notifications: AccountNotificationsService,
     private readonly audit: AuditService,
   ) {}
+
+  private requireHospital(actor: AuthenticatedUser): string {
+    if (!actor.hospitalId) throw new NotFoundException('A hospital must be selected for this operation');
+    return actor.hospitalId;
+  }
 
   findActiveById(id: string): Promise<User | null> {
     return this.repository.findActiveById(id);
@@ -43,8 +49,9 @@ export class UsersService {
     return user;
   }
 
-  async list(query: ListUsersQueryDto): Promise<PaginatedResult<UserResponse>> {
-    const page = await this.repository.search(query);
+  async list(query: ListUsersQueryDto, actor: AuthenticatedUser): Promise<PaginatedResult<UserResponse>> {
+    const hospitalId = this.requireHospital(actor);
+    const page = await this.repository.search(query, hospitalId);
     return { ...page, items: page.items.map(toUserResponse) };
   }
 
@@ -52,13 +59,19 @@ export class UsersService {
     if (await this.repository.existsByEmail(dto.email)) {
       throw new ConflictException('An account with this email already exists');
     }
+    if (dto.role === UserRole.SUPER_ADMIN) {
+      throw new BadRequestException('Platform super-admin accounts cannot be created by hospital administrators');
+    }
+    const hospitalId = this.requireHospital(actor);
     const user = await this.repository.create({
       email: dto.email,
       name: dto.name,
       role: dto.role,
+      hospitalId,
       passwordHash: dto.password ? await this.passwords.hash(dto.password) : await this.passwords.hashUnusable(),
     });
     await this.audit.record({
+      hospitalId,
       actorId: actor.id,
       action: AuditAction.USER_CREATED,
       targetType: AuditTarget.USER,
@@ -73,9 +86,12 @@ export class UsersService {
   async setActive(id: string, isActive: boolean, actor: AuthenticatedUser): Promise<UserResponse> {
     if (id === actor.id) throw new BadRequestException('You cannot change your own account status');
     const user = await this.getByIdOrFail(id);
-    await this.repository.setActive(id, isActive);
-    if (!isActive) await this.repository.incrementTokenVersion(id);
+    const hospitalId = this.requireHospital(actor);
+    if (user.hospitalId !== hospitalId) throw new NotFoundException('Account not found');
+    await this.repository.setActive(id, hospitalId, isActive);
+    if (!isActive) await this.repository.incrementTokenVersion(id, user.hospitalId ?? undefined);
     await this.audit.record({
+      hospitalId,
       actorId: actor.id,
       action: isActive ? AuditAction.USER_ENABLED : AuditAction.USER_DISABLED,
       targetType: AuditTarget.USER,

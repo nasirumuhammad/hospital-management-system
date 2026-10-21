@@ -12,7 +12,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { api, errorMessage } from '@/lib/api-client';
 import { formatDateTime, formatMoney, fullName, titleCase } from '@/lib/format';
 import { readForm } from '@/lib/form';
-import { fetchPatientOptions } from '@/lib/option-fetchers';
+import { fetchPatientOptions, fetchVisitOptions } from '@/lib/option-fetchers';
 import { useRefreshAction } from '@/lib/use-action';
 
 export function CreateInvoiceButton() {
@@ -43,10 +43,10 @@ function InvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const { amount, dueDate, ...rest } = readForm(event.currentTarget);
+    const { amount, dueDate, visitId, ...rest } = readForm(event.currentTarget);
     setBusy(true);
     try {
-      await api('/invoices', { method: 'POST', body: { ...rest, amount: Number(amount), dueDate: dueDate || undefined } });
+      await api('/invoices', { method: 'POST', body: { ...rest, visitId: visitId || undefined, amount: Number(amount), dueDate: dueDate || undefined } });
       onSaved();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -58,6 +58,7 @@ function InvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
     <Modal title="Create invoice" eyebrow="BILLING" onClose={onClose} onSubmit={submit}>
       <ErrorBanner message={error} />
       <ComboboxField label="Patient" name="patientId" required placeholder="Search by name, email, phone or ID" fetchOptions={fetchPatientOptions} />
+      <ComboboxField label="Visit (optional)" name="visitId" placeholder="Link this invoice to a visit" fetchOptions={fetchVisitOptions} />
       <Field label="Description" name="description" required />
       <div className="field-row">
         <Field label="Amount" name="amount" type="number" required min="0.01" step="0.01" />
@@ -69,7 +70,9 @@ function InvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
 }
 
 function InvoiceDetailModal({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
-  const isAdmin = useCurrentUser().role === 'ADMIN';
+  const role = useCurrentUser().role;
+  const isAdmin = role === 'ADMIN';
+  const canRecordPayment = ['ADMIN', 'CASHIER'].includes(role);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -116,20 +119,21 @@ function InvoiceDetailModal({ id, onClose, onChanged }: { id: string; onClose: (
       {invoice && (
         <>
           <dl className="detail-list">
+            <div><dt>Invoice ID</dt><dd><code>{invoice.id}</code></dd></div>
             <div><dt>Patient</dt><dd>{fullName(invoice.patient)}</dd></div>
             <div><dt>Total / paid</dt><dd>{formatMoney(invoice.amount)} / {formatMoney(invoice.amountPaid)}</dd></div>
             <div><dt>Status</dt><dd><StatusBadge value={invoice.status} /></dd></div>
           </dl>
           <div className="table-scroll">
             <table>
-              <thead><tr><th>Received</th><th>Method</th><th>Reference</th><th>Amount</th></tr></thead>
+              <thead><tr><th>Received</th><th>Method</th><th>Reference</th><th>Amount</th><th>Receipt</th></tr></thead>
               <tbody>{invoice.payments?.map((payment) => (
-                <tr key={payment.id}><td>{formatDateTime(payment.createdAt)}</td><td>{titleCase(payment.method)}</td><td>{payment.reference || '—'}</td><td>{formatMoney(payment.amount)}</td></tr>
+                <tr key={payment.id}><td>{formatDateTime(payment.createdAt)}</td><td>{titleCase(payment.method)}</td><td>{payment.reference || '—'}</td><td>{formatMoney(payment.amount)}</td><td><a className="btn secondary small" href={`/print/receipt/${payment.id}`} target="_blank" rel="noreferrer">Print receipt</a></td></tr>
               ))}</tbody>
             </table>
             {(invoice.payments?.length ?? 0) === 0 && <div className="empty-small">No payments recorded.</div>}
           </div>
-          {isAdmin && open && (
+          {canRecordPayment && open && (
             <form onSubmit={recordPayment} style={{ marginTop: 18 }}>
               <div className="field-row">
                 <Field label="Payment amount" name="amount" type="number" required min="0.01" step="0.01" />

@@ -1,4 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { AuditAction } from '../common/enums/audit-action.enum';
 import { AuditTarget } from '../common/enums/audit-target.enum';
@@ -21,6 +23,7 @@ export class PrescriptionsService {
     private readonly patients: PatientsService,
     private readonly doctors: DoctorsService,
     private readonly audit: AuditService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   list(query: ListPrescriptionsQueryDto, user: AuthenticatedUser): Promise<PaginatedResult<Prescription>> {
@@ -34,11 +37,17 @@ export class PrescriptionsService {
   }
 
   async create(dto: CreatePrescriptionDto, user: AuthenticatedUser): Promise<Prescription> {
-    const doctor = await this.doctors.findByUserIdOrFail(user.id);
-    const patient = await this.patients.findOrFail(dto.patientId);
-    if (dto.medicalRecordId) await this.assertRecordMatches(dto.medicalRecordId, patient.id, doctor.id);
+    const doctor = await this.doctors.findByUserIdOrFail(user.id, user);
+    const patient = await this.patients.findOrFail(dto.patientId, user);
+    await this.assertRecordMatches(dto.medicalRecordId, patient.id, doctor.id, user);
+    if (dto.drugId) {
+      const drug = await this.dataSource.query(`SELECT \"id\" FROM \"drugs\" WHERE \"id\"=$1 AND \"hospitalId\"=$2 AND \"isActive\"=true`, [dto.drugId, this.requireHospital(user)]);
+      if (!drug.length) throw new BadRequestException('Choose an active drug from this hospital catalogue');
+      if (!dto.quantityPrescribed) throw new BadRequestException('quantityPrescribed is required when a catalog drug is selected');
+    }
     const saved = await this.repository.save(
       this.repository.create({
+        hospitalId: this.requireHospital(user),
         patientId: patient.id,
         doctorId: doctor.id,
         medicalRecordId: dto.medicalRecordId ?? null,
@@ -47,22 +56,31 @@ export class PrescriptionsService {
         frequency: dto.frequency,
         duration: dto.duration,
         instructions: dto.instructions ?? null,
+        drugId: dto.drugId ?? null,
+        quantityPrescribed: dto.quantityPrescribed ?? null,
+        status: 'PENDING',
       }),
     );
-    await this.audit.record({ actorId: user.id, action: AuditAction.PRESCRIPTION_CREATED, targetType: AuditTarget.PRESCRIPTION, targetId: saved.id });
+    await this.audit.record({ hospitalId: this.requireHospital(user), actorId: user.id, action: AuditAction.PRESCRIPTION_CREATED, targetType: AuditTarget.PRESCRIPTION, targetId: saved.id });
     return this.findOne(saved.id, user);
   }
 
-  private async assertRecordMatches(recordId: string, patientId: string, doctorId: string): Promise<void> {
-    const record = await this.records.findAuthoredBy(recordId, doctorId);
+  private async assertRecordMatches(recordId: string, patientId: string, doctorId: string, user: AuthenticatedUser): Promise<void> {
+    const record = await this.records.findAuthoredBy(recordId, doctorId, user);
     if (!record || record.patientId !== patientId) {
       throw new BadRequestException('Medical record must belong to this patient and doctor');
     }
   }
 
   private scopeFor(user: AuthenticatedUser): PrescriptionScope {
-    if (user.role === UserRole.PATIENT) return { patientUserId: user.id };
-    if (user.role === UserRole.DOCTOR) return { doctorUserId: user.id };
-    return {};
+    const hospitalId = this.requireHospital(user);
+    if (user.role === UserRole.PATIENT) return { hospitalId, patientUserId: user.id };
+    if (user.role === UserRole.DOCTOR) return { hospitalId, doctorUserId: user.id };
+    return { hospitalId };
+  }
+
+  private requireHospital(user: AuthenticatedUser): string {
+    if (!user.hospitalId) throw new NotFoundException('A hospital must be selected for this operation');
+    return user.hospitalId;
   }
 }

@@ -17,6 +17,9 @@ export class ProfileLinkService {
 
   async link(dto: LinkProfileDto, actor: AuthenticatedUser) {
     const user = await this.users.getByIdOrFail(dto.userId);
+    if (!actor.hospitalId || user.hospitalId !== actor.hospitalId) {
+      throw new BadRequestException('Account and profile must belong to the same hospital');
+    }
     if (user.role !== ROLE_FOR_PROFILE[dto.profileType]) {
       throw new BadRequestException('Account role must match the profile type');
     }

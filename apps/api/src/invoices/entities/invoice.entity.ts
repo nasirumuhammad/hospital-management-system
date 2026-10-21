@@ -10,6 +10,10 @@ import { Payment } from './payment.entity';
 @Index('IDX_invoices_status', ['status'])
 export class Invoice extends AbstractEntity {
   @Column({ type: 'uuid' })
+  hospitalId: string;
+
+
+  @Column({ type: 'uuid' })
   patientId: string;
 
   @ManyToOne(() => Patient, { nullable: false, onDelete: 'RESTRICT' })
@@ -18,6 +22,9 @@ export class Invoice extends AbstractEntity {
 
   @Column({ type: 'uuid', nullable: true })
   appointmentId: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  visitId: string | null;
 
   @ManyToOne(() => Appointment, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'appointmentId', foreignKeyConstraintName: 'FK_invoices_appointment' })

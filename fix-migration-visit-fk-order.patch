@@ -1,0 +1,21 @@
+diff --git a/apps/api/src/database/migrations/1763000000000-ClinicalAndOperationsSchema.ts b/apps/api/src/database/migrations/1763000000000-ClinicalAndOperationsSchema.ts
+--- a/apps/api/src/database/migrations/1763000000000-ClinicalAndOperationsSchema.ts
++++ b/apps/api/src/database/migrations/1763000000000-ClinicalAndOperationsSchema.ts
+@@ -241,8 +241,6 @@
+     await q.query(`ALTER TABLE "prescriptions" ADD CONSTRAINT "FK_prescriptions_doctor_tenant" FOREIGN KEY ("doctorId","hospitalId") REFERENCES "doctors"("id","hospitalId") ON DELETE RESTRICT`);
+     await q.query(`ALTER TABLE "invoices" ADD CONSTRAINT "FK_invoices_patient_tenant" FOREIGN KEY ("patientId","hospitalId") REFERENCES "patients"("id","hospitalId") ON DELETE RESTRICT`);
+     await q.query(`ALTER TABLE "payments" ADD CONSTRAINT "FK_payments_invoice_tenant" FOREIGN KEY ("invoiceId","hospitalId") REFERENCES "invoices"("id","hospitalId") ON DELETE RESTRICT`);
+-    await q.query(`ALTER TABLE "medical_records" ADD CONSTRAINT "FK_medical_records_visit_tenant" FOREIGN KEY ("visitId","hospitalId") REFERENCES "visits"("id","hospitalId") ON DELETE RESTRICT`);
+-    await q.query(`ALTER TABLE "invoices" ADD CONSTRAINT "FK_invoices_visit_tenant" FOREIGN KEY ("visitId","hospitalId") REFERENCES "visits"("id","hospitalId") ON DELETE RESTRICT`);
+     const tenantTables = [
+       'payers','patient_coverages','visits','visit_authorizations','triage_records','consultation_diagnoses','patient_allergies',
+       'lab_tests','lab_test_parameters','lab_parameter_ranges','lab_orders','lab_order_items','lab_results','drugs','drug_batches','dispensings',
+@@ -252,6 +250,8 @@
+     for (const table of tenantTables) {
+       await q.query(`CREATE UNIQUE INDEX "UQ_${table}_id_hospital" ON "${table}" ("id","hospitalId")`);
+     }
++    await q.query(`ALTER TABLE "medical_records" ADD CONSTRAINT "FK_medical_records_visit_tenant" FOREIGN KEY ("visitId","hospitalId") REFERENCES "visits"("id","hospitalId") ON DELETE RESTRICT`);
++    await q.query(`ALTER TABLE "invoices" ADD CONSTRAINT "FK_invoices_visit_tenant" FOREIGN KEY ("visitId","hospitalId") REFERENCES "visits"("id","hospitalId") ON DELETE RESTRICT`);
+     const tenantRelations: Array<[string, string, string, string]> = [
+       ['audit_logs','actorId','staff_users','actor'], ['patients','userId','staff_users','user'], ['doctors','userId','staff_users','user'], ['payments','receivedById','staff_users','received_by'],
+       ['patient_coverages','patientId','patients','patient'], ['patient_coverages','payerId','payers','payer'],

@@ -1,5 +1,5 @@
 'use client';
-import { CalendarDays, ClipboardList, FileText, LayoutDashboard, LogOut, Pill, ReceiptText, ScrollText, Settings, Stethoscope, UserRound, Users } from 'lucide-react';
+import { CalendarDays, ClipboardList, FileText, LayoutDashboard, LogOut, Pill, ReceiptText, ScrollText, Settings, Stethoscope, UserRound, Users, Activity, FlaskConical, BedDouble, Baby, BarChart3, Building2, WalletCards } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -13,6 +13,7 @@ const ICON_STROKE = 1.75;
 const ICONS: Record<NavEntry['icon'], typeof Users> = {
   overview: LayoutDashboard, appointments: CalendarDays, patients: Users, doctors: Stethoscope, records: FileText,
   prescriptions: Pill, invoices: ReceiptText, accounts: UserRound, audit: ScrollText, settings: Settings,
+  visits: Activity, laboratory: FlaskConical, pharmacy: Pill, inpatient: BedDouble, maternity: Baby, reports: BarChart3, platform: Building2, billing: WalletCards,
 };
 
 function isActive(pathname: string, href: string): boolean {

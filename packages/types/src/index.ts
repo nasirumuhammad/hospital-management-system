@@ -1,4 +1,4 @@
-export const USER_ROLES = ['ADMIN', 'DOCTOR', 'PATIENT'] as const;
+export const USER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'CASHIER', 'LAB', 'PHARMACIST', 'HMO_DESK', 'WARD_MANAGER', 'PATIENT'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 export const APPOINTMENT_STATUSES = ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const;
@@ -10,7 +10,7 @@ export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 export const PAYMENT_METHODS = ['CASH', 'CARD', 'TRANSFER', 'OTHER'] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
-export const GENDERS = ['Female', 'Male', 'Other', 'Prefer not to say'] as const;
+export const GENDERS = ['MALE', 'FEMALE'] as const;
 
 export const AUDIT_TARGETS = ['user', 'patient', 'doctor', 'appointment', 'medical_record', 'prescription', 'invoice', 'payment'] as const;
 export type AuditTarget = (typeof AUDIT_TARGETS)[number];
@@ -37,8 +37,13 @@ export interface Patient {
   id: string;
   firstName: string;
   lastName: string;
-  email: string;
-  phone: string | null;
+  email: string | null;
+  phone: string;
+  middleName?: string | null;
+  hospitalNumber?: string;
+  nextOfKinName?: string | null;
+  nextOfKinPhone?: string | null;
+  nextOfKinRelationship?: string | null;
   dateOfBirth: string | null;
   gender: string | null;
   address: string | null;
@@ -88,6 +93,7 @@ export interface MedicalRecord {
   patientId: string;
   doctorId: string;
   appointmentId: string | null;
+  visitId?: string | null;
   diagnosis: string;
   notes: string;
   allergies: string | null;
@@ -107,6 +113,9 @@ export interface Prescription {
   frequency: string;
   duration: string;
   instructions: string | null;
+  drugId?: string | null;
+  quantityPrescribed?: number | null;
+  status?: 'PENDING' | 'PARTIAL' | 'DISPENSED' | 'CANCELLED';
   createdAt: string;
   patient: PatientSummary;
   doctor: DoctorSummary;
@@ -124,6 +133,7 @@ export interface Invoice {
   id: string;
   patientId: string;
   appointmentId: string | null;
+  visitId?: string | null;
   description: string;
   amount: string;
   amountPaid: string;
@@ -152,3 +162,12 @@ export interface DashboardSummary {
   upcomingAppointments: number;
   outstandingInvoices?: number;
 }
+
+export interface Visit {
+  id: string; hospitalId: string; patientId: string; visitNumber: number; visitDate: string; source: string;
+  status: string; priority: string; arrivedAt: string; hospitalNumber: string; firstName: string; middleName: string | null; lastName: string; phone: string;
+  doctorFirstName?: string | null; doctorLastName?: string | null;
+}
+export interface LabOrderItemSummary { id: string; testName: string; status: string; }
+export interface LabOrder { id: string; patientId: string; orderedAt: string; clinicalNote: string | null; hospitalNumber: string; firstName: string; lastName: string; items: LabOrderItemSummary[]; }
+export interface Drug { id: string; genericName: string; brandName: string | null; form: string; strength: string | null; dispensingUnit: string; reorderLevel: number; availableStock: number; }

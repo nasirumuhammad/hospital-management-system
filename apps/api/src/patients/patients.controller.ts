@@ -13,31 +13,31 @@ export class PatientsController {
   constructor(private readonly patients: PatientsService) {}
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
-  list(@Query() query: ListPatientsQueryDto) {
-    return this.patients.list(query);
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTIONIST)
+  list(@Query() query: ListPatientsQueryDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.patients.list(query, user);
   }
 
   @Get('me')
   @Roles(UserRole.PATIENT)
   myProfile(@CurrentUser() user: AuthenticatedUser) {
-    return this.patients.findByUserIdOrFail(user.id);
+    return this.patients.findByUserIdOrFail(user.id, user);
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.patients.findOrFail(id);
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTIONIST)
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.patients.findOrFail(id, user);
   }
 
   @Post()
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.RECEPTIONIST)
   create(@Body() dto: CreatePatientDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.patients.create(dto, actor);
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.RECEPTIONIST)
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePatientDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.patients.update(id, dto, actor);
   }

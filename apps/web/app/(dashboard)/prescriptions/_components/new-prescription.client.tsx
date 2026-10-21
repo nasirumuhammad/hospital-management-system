@@ -7,7 +7,7 @@ import { Field, TextArea } from '@/components/ui/Fields';
 import { Modal, ModalActions } from '@/components/ui/Modal';
 import { api, errorMessage } from '@/lib/api-client';
 import { readForm } from '@/lib/form';
-import { fetchPatientOptions, recordOptionsFetcher } from '@/lib/option-fetchers';
+import { fetchDrugOptions, fetchPatientOptions, recordOptionsFetcher } from '@/lib/option-fetchers';
 import { useRefreshAction } from '@/lib/use-action';
 
 export function NewPrescriptionButton() {
@@ -32,7 +32,7 @@ function PrescriptionModal({ onClose, onSaved }: { onClose: () => void; onSaved:
     const values = readForm(event.currentTarget);
     setBusy(true);
     try {
-      await api('/prescriptions', { method: 'POST', body: { ...values, medicalRecordId: values.medicalRecordId || undefined, instructions: values.instructions || undefined } });
+      await api('/prescriptions', { method: 'POST', body: { ...values, medicalRecordId: values.medicalRecordId || undefined, drugId: values.drugId || undefined, quantityPrescribed: values.quantityPrescribed ? Number(values.quantityPrescribed) : undefined, instructions: values.instructions || undefined } });
       onSaved();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -45,6 +45,8 @@ function PrescriptionModal({ onClose, onSaved }: { onClose: () => void; onSaved:
       <ErrorBanner message={error} />
       <ComboboxField label="Patient" name="patientId" required placeholder="Search by name, email, phone or ID" fetchOptions={fetchPatientOptions} onValueChange={setPatientId} />
       {patientId && <ComboboxField key={patientId} label="Related medical record (optional)" name="medicalRecordId" placeholder="Search diagnoses…" fetchOptions={fetchRecords} />}
+      <ComboboxField label="Catalog drug (optional, enables pharmacy dispensing)" name="drugId" placeholder="Search hospital drug catalogue" fetchOptions={fetchDrugOptions} />
+      <Field label="Quantity prescribed (required for catalog drug)" name="quantityPrescribed" type="number" min="1" />
       <Field label="Medication" name="medication" required />
       <div className="field-row"><Field label="Dosage" name="dosage" required /><Field label="Frequency" name="frequency" required /></div>
       <Field label="Duration" name="duration" required />

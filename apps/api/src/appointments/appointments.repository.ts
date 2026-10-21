@@ -11,6 +11,7 @@ import { ListAppointmentsQueryDto } from './dto/list-appointments-query.dto';
 import { Appointment } from './entities/appointment.entity';
 
 export interface AppointmentScope {
+  hospitalId: string;
   patientUserId?: string;
   doctorUserId?: string;
 }
@@ -38,12 +39,12 @@ export class AppointmentsRepository {
     return this.repository.save(appointment);
   }
 
-  async update(id: string, changes: Partial<Pick<Appointment, 'status' | 'scheduledAt' | 'reason'>>): Promise<void> {
-    await this.repository.update({ id }, changes);
+  async update(id: string, hospitalId: string, changes: Partial<Pick<Appointment, 'status' | 'scheduledAt' | 'reason'>>): Promise<void> {
+    await this.repository.update({ id, hospitalId }, changes);
   }
 
-  async softDelete(id: string): Promise<void> {
-    await this.repository.softDelete({ id });
+  async softDelete(id: string, hospitalId: string): Promise<void> {
+    await this.repository.softDelete({ id, hospitalId });
   }
 
   findOneScoped(id: string, scope: AppointmentScope): Promise<Appointment | null> {
@@ -62,10 +63,10 @@ export class AppointmentsRepository {
     return paginate(builder, query);
   }
 
-  async existsOverlapping(doctorId: string, window: { from: Date; to: Date }, excludeId?: string): Promise<boolean> {
+  async existsOverlapping(doctorId: string, hospitalId: string, window: { from: Date; to: Date }, excludeId?: string): Promise<boolean> {
     const builder = this.repository
       .createQueryBuilder('a')
-      .where('a.doctorId = :doctorId', { doctorId })
+      .where('a.doctorId = :doctorId AND a.hospitalId = :hospitalId', { doctorId, hospitalId })
       .andWhere('a.status IN (:...open)', { open: OPEN_STATUSES })
       .andWhere('a.scheduledAt > :from AND a.scheduledAt < :to', window);
     if (excludeId) builder.andWhere('a.id <> :excludeId', { excludeId });
@@ -89,7 +90,8 @@ export class AppointmentsRepository {
       .addSelect(PATIENT_COLUMNS)
       .leftJoin('a.doctor', 'doctor')
       .addSelect(DOCTOR_COLUMNS)
-      .where('a.deletedAt IS NULL');
+      .where('a.deletedAt IS NULL')
+      .andWhere('a.hospitalId = :hospitalId', { hospitalId: scope.hospitalId });
     if (scope.patientUserId) builder.andWhere('patient.userId = :patientUserId', { patientUserId: scope.patientUserId });
     if (scope.doctorUserId) builder.andWhere('doctor.userId = :doctorUserId', { doctorUserId: scope.doctorUserId });
     return builder;

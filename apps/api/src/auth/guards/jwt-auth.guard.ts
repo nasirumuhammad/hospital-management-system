@@ -1,9 +1,12 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { Reflector } from '@nestjs/core';
 import { AUTH_ERROR, ACCESS_COOKIE_NAME } from '../../common/constants/auth.constants';
 import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
 import { AuthenticatedRequest, AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { UsersService } from '../../users/users.service';
+import { Hospital } from '../../hospitals/entities/hospital.entity';
 import { AccessTokenService } from '../access-token.service';
 
 const BEARER_SCHEME = 'Bearer';
@@ -14,6 +17,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly accessTokens: AccessTokenService,
     private readonly users: UsersService,
+    @InjectRepository(Hospital) private readonly hospitals: Repository<Hospital>,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -39,9 +43,13 @@ export class JwtAuthGuard implements CanActivate {
   private async authenticate(token: string): Promise<AuthenticatedUser> {
     const payload = await this.accessTokens.verify(token).catch(() => null);
     const user = payload ? await this.users.findActiveById(payload.sub) : null;
-    if (!payload || !user || user.tokenVersion !== payload.tv) {
+    if (!payload || !user || user.tokenVersion !== payload.tv || payload.hospitalId !== user.hospitalId) {
       throw new UnauthorizedException(AUTH_ERROR.SESSION_INVALID);
     }
-    return { id: user.id, email: user.email, name: user.name, role: user.role };
+    if (user.hospitalId) {
+      const hospital = await this.hospitals.findOne({ where: { id: user.hospitalId }, select: { id: true, isActive: true } });
+      if (!hospital?.isActive) throw new UnauthorizedException(AUTH_ERROR.SESSION_INVALID);
+    }
+    return { id: user.id, email: user.email, name: user.name, role: user.role, hospitalId: user.hospitalId };
   }
 }

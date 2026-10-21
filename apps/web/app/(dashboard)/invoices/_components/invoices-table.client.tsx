@@ -13,6 +13,7 @@ const STATUS_OPTIONS = INVOICE_STATUSES.map((value) => ({ value, label: titleCas
 
 export function InvoicesTable({ data, sort }: { data: Paginated<Invoice>; sort: SortSpec }) {
   const columns: ColumnDef<Invoice>[] = [
+    { id: 'id', header: 'Invoice ID', enableSorting: false, cell: ({ row }) => <code title={row.original.id}>{row.original.id}</code> },
     { id: 'patient', header: 'Patient', enableSorting: true, enableHiding: false, cell: ({ row }) => <PersonCell name={fullName(row.original.patient)} tone="patient" /> },
     { id: 'description', header: 'Description', enableSorting: true, cell: ({ row }) => row.original.description },
     { id: 'amount', header: 'Amount', enableSorting: true, cell: ({ row }) => formatMoney(row.original.amount) },

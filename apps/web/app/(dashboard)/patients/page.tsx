@@ -11,6 +11,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
   const user = await getSessionUser();
   if (!user) return null;
   const isAdmin = user.role === 'ADMIN';
+  const canRegister = ['ADMIN', 'RECEPTIONIST'].includes(user.role);
 
   const params = await searchParams;
   const { page, limit, q, sort, apiSort } = tableQuery(params, { sortable: PATIENT_SORTABLE, defaultSort: PATIENT_DEFAULT_SORT });
@@ -19,7 +20,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pag
 
   return (
     <>
-      <PageHeader title="Patients" description="Manage the patient directory." extra={isAdmin && <AddPatientButton />} />
+      <PageHeader title="Patients" description="Manage the patient directory." extra={canRegister && <AddPatientButton />} />
       <ListPanel title="Patient directory" description={`${data.total.toLocaleString('en-US')} registered patients`}>
         <PatientsTable data={data} sort={sort} isAdmin={isAdmin} />
       </ListPanel>

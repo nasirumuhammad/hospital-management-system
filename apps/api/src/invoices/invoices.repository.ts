@@ -10,6 +10,7 @@ import { ListInvoicesQueryDto } from './dto/list-invoices-query.dto';
 import { Invoice } from './entities/invoice.entity';
 
 export interface InvoiceScope {
+  hospitalId: string;
   patientUserId?: string;
 }
 
@@ -41,12 +42,12 @@ export class InvoicesRepository {
     return this.repository.save(invoice);
   }
 
-  async update(id: string, changes: Partial<Invoice>): Promise<void> {
-    await this.repository.update({ id }, changes);
+  async update(id: string, hospitalId: string, changes: Partial<Invoice>): Promise<void> {
+    await this.repository.update({ id, hospitalId }, changes);
   }
 
-  findPlainById(id: string): Promise<Invoice | null> {
-    return this.repository.findOneBy({ id });
+  findPlainById(id: string, hospitalId: string): Promise<Invoice | null> {
+    return this.repository.findOneBy({ id, hospitalId });
   }
 
   findOneScoped(id: string, scope: InvoiceScope): Promise<Invoice | null> {
@@ -74,13 +75,13 @@ export class InvoicesRepository {
     return this.scoped(scope).andWhere('i.status IN (:...statuses)', { statuses: OUTSTANDING_STATUSES }).getCount();
   }
 
-  withLockedInvoice<T>(id: string, work: (invoice: Invoice, manager: EntityManager) => Promise<T>): Promise<T> {
+  withLockedInvoice<T>(id: string, hospitalId: string, work: (invoice: Invoice, manager: EntityManager) => Promise<T>): Promise<T> {
     return this.dataSource.transaction(async (manager) => {
       const invoice = await manager
         .getRepository(Invoice)
         .createQueryBuilder('i')
         .setLock('pessimistic_write')
-        .where('i.id = :id', { id })
+        .where('i.id = :id AND i."hospitalId" = :hospitalId', { id, hospitalId })
         .getOne();
       if (!invoice) throw new NotFoundException('Invoice not found');
       return work(invoice, manager);
@@ -88,7 +89,7 @@ export class InvoicesRepository {
   }
 
   private scoped(scope: InvoiceScope): SelectQueryBuilder<Invoice> {
-    const builder = this.repository.createQueryBuilder('i').withDeleted().leftJoin('i.patient', 'patient').addSelect(PATIENT_COLUMNS);
+    const builder = this.repository.createQueryBuilder('i').withDeleted().leftJoin('i.patient', 'patient').addSelect(PATIENT_COLUMNS).andWhere('i.hospitalId = :hospitalId', { hospitalId: scope.hospitalId });
     if (scope.patientUserId) builder.andWhere('patient.userId = :patientUserId', { patientUserId: scope.patientUserId });
     return builder;
   }

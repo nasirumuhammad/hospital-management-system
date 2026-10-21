@@ -62,7 +62,7 @@ function CreateAccountModal({ onClose, onSaved }: { onClose: () => void; onSaved
       <Field label="Full name" name="name" required />
       <Field label="Email address" name="email" type="email" required />
       <Field label="Temporary password (12+ characters)" name="password" type="password" required minLength={12} autoComplete="new-password" />
-      <Select label="Role" name="role" required defaultValue="PATIENT" options={USER_ROLES.map((role) => ({ value: role, label: titleCase(role) }))} />
+      <Select label="Role" name="role" required defaultValue="PATIENT" options={USER_ROLES.filter((role) => role !== 'SUPER_ADMIN').map((role) => ({ value: role, label: titleCase(role) }))} />
       <p className="auth-description">A verification email is sent to the new account.</p>
       <ModalActions onCancel={onClose} submitLabel="Create account" busy={busy} />
     </Modal>

@@ -21,20 +21,20 @@ const SORTABLE: SortMap = {
 export class PatientsRepository {
   constructor(@InjectRepository(Patient) private readonly repository: Repository<Patient>) {}
 
-  findById(id: string): Promise<Patient | null> {
-    return this.repository.findOneBy({ id });
+  findById(id: string, hospitalId: string): Promise<Patient | null> {
+    return this.repository.findOneBy({ id, hospitalId });
   }
 
-  findByUserId(userId: string): Promise<Patient | null> {
-    return this.repository.findOneBy({ userId });
+  findByUserId(userId: string, hospitalId: string): Promise<Patient | null> {
+    return this.repository.findOneBy({ userId, hospitalId });
   }
 
-  existsByUserId(userId: string): Promise<boolean> {
-    return this.repository.existsBy({ userId });
+  existsByUserId(userId: string, hospitalId: string): Promise<boolean> {
+    return this.repository.existsBy({ userId, hospitalId });
   }
 
-  count(): Promise<number> {
-    return this.repository.count();
+  count(hospitalId: string): Promise<number> {
+    return this.repository.countBy({ hospitalId });
   }
 
   save(patient: Patient): Promise<Patient> {
@@ -45,12 +45,12 @@ export class PatientsRepository {
     return this.repository.create(data);
   }
 
-  async softDelete(id: string): Promise<void> {
-    await this.repository.softDelete({ id });
+  async softDelete(id: string, hospitalId: string): Promise<void> {
+    await this.repository.softDelete({ id, hospitalId });
   }
 
-  search(query: ListPatientsQueryDto): Promise<PaginatedResult<Patient>> {
-    const builder = this.repository.createQueryBuilder('patient');
+  search(query: ListPatientsQueryDto, hospitalId: string): Promise<PaginatedResult<Patient>> {
+    const builder = this.repository.createQueryBuilder('patient').where('patient.hospitalId = :hospitalId', { hospitalId });
     if (query.gender) builder.andWhere('patient.gender = :gender', { gender: query.gender });
     if (query.q) {
       builder.andWhere(

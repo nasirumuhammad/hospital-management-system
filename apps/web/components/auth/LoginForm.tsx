@@ -19,8 +19,8 @@ export function LoginForm() {
     setBusy(true);
     setError('');
     try {
-      await login(email, password);
-      router.replace('/');
+      const signedInUser = await login(email, password);
+      router.replace(signedInUser.role === 'SUPER_ADMIN' ? '/platform/hospitals' : '/');
       router.refresh(); // re-render server components with the new session cookie
     } catch (failure) {
       setError(errorMessage(failure, 'Sign in failed'));

@@ -12,6 +12,7 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/database/data-source.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/database/data-source.ts",
     "migration:show": "typeorm-ts-node-commonjs migration:show -d src/database/data-source.ts",
+    "seed:platform-admin": "ts-node scripts/seed-platform-admin.ts",
     "migration:run:prod": "typeorm migration:run -d dist/database/data-source.js",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand"
