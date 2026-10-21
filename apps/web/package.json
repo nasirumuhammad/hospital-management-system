@@ -10,6 +10,7 @@
     "check:dialogs": "node scripts/check-no-browser-dialogs.mjs"
   },
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
     "@healthcare/types": "workspace:*",
     "@tanstack/react-table": "^8.21.3",
     "clsx": "^2.1.1",

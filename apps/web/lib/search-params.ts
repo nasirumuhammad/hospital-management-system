@@ -15,14 +15,32 @@ export const oneOf = <T extends string>(value: Param, allowed: readonly T[]): T 
   return allowed.find((item) => item === candidate);
 };
 
-/** Builds `?filter=…&page=n` links that keep the active filters. */
-export function hrefBuilder(filters: Record<string, string | undefined>) {
-  return (page: number): string => {
-    const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
-    });
-    params.set('page', String(page));
-    return `?${params}`;
+export const PAGE_SIZES = [10, 15, 25, 50, 100] as const;
+
+export interface SortSpec {
+  id: string;
+  desc: boolean;
+}
+
+/**
+ * Reads the table state (`page`, `limit`, `sort`, `order`, `q`) from the URL and validates it.
+ * `sortable` is the allow-list of column ids the API accepts, so URL input never reaches the API unchecked.
+ */
+export function tableQuery(
+  params: Record<string, string | string[] | undefined>,
+  { sortable, defaultSort, defaultLimit = DEFAULT_PAGE_SIZE }: { sortable: readonly string[]; defaultSort: SortSpec; defaultLimit?: number },
+) {
+  const requestedLimit = Number(first(params.limit));
+  const limit = PAGE_SIZES.find((size) => size === requestedLimit) ?? defaultLimit;
+  const requestedSort = sortable.find((id) => id === first(params.sort));
+  const requestedOrder = oneOf(params.order, ['asc', 'desc'] as const);
+  const sort: SortSpec = requestedSort ? { id: requestedSort, desc: (requestedOrder ?? 'asc') === 'desc' } : defaultSort;
+  return {
+    page: pageNumber(params.page),
+    limit,
+    q: searchTerm(params.q),
+    sort,
+    /** Ready to spread into the API query. */
+    apiSort: { sortBy: sort.id, order: sort.desc ? 'desc' : 'asc' } as const,
   };
 }

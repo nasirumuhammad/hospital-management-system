@@ -1,20 +1,19 @@
 'use client';
 import { Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { PAYMENT_METHODS, type Invoice, type Patient } from '@healthcare/types';
+import { PAYMENT_METHODS, type Invoice } from '@healthcare/types';
 import { useCurrentUser } from '@/components/auth/AuthProvider';
-import { ErrorBanner } from '@/components/ui/Feedback';
+import { ComboboxField } from '@/components/ui/ComboboxField';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ErrorBanner } from '@/components/ui/Feedback';
 import { Field, Select } from '@/components/ui/Fields';
 import { Modal, ModalActions } from '@/components/ui/Modal';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { api, errorMessage } from '@/lib/api-client';
 import { formatDateTime, formatMoney, fullName, titleCase } from '@/lib/format';
 import { readForm } from '@/lib/form';
+import { fetchPatientOptions } from '@/lib/option-fetchers';
 import { useRefreshAction } from '@/lib/use-action';
-import { useList } from '@/lib/use-list';
-
-const OPTION_LIMIT = 100;
 
 export function CreateInvoiceButton() {
   const [open, setOpen] = useState(false);
@@ -39,7 +38,6 @@ export function InvoiceDetailsButton({ id }: { id: string }) {
 }
 
 function InvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const patients = useList<Patient>('/patients', { limit: OPTION_LIMIT });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -59,7 +57,7 @@ function InvoiceModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
   return (
     <Modal title="Create invoice" eyebrow="BILLING" onClose={onClose} onSubmit={submit}>
       <ErrorBanner message={error} />
-      <Select label="Patient" name="patientId" required placeholder="Select patient" options={patients.items.map((p) => ({ value: p.id, label: `${fullName(p)} · ${p.email}` }))} />
+      <ComboboxField label="Patient" name="patientId" required placeholder="Search by name, email, phone or ID" fetchOptions={fetchPatientOptions} />
       <Field label="Description" name="description" required />
       <div className="field-row">
         <Field label="Amount" name="amount" type="number" required min="0.01" step="0.01" />

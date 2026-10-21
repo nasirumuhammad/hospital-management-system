@@ -2,17 +2,15 @@
 import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import type { Doctor, Patient } from '@healthcare/types';
 import { useCurrentUser } from '@/components/auth/AuthProvider';
 import { ErrorBanner } from '@/components/ui/Feedback';
-import { Field, Select, TextArea } from '@/components/ui/Fields';
+import { ComboboxField } from '@/components/ui/ComboboxField';
+import { Field, TextArea } from '@/components/ui/Fields';
 import { Modal, ModalActions } from '@/components/ui/Modal';
 import { api, errorMessage } from '@/lib/api-client';
-import { fullName, toIsoFromLocalInput } from '@/lib/format';
+import { toIsoFromLocalInput } from '@/lib/format';
 import { readForm } from '@/lib/form';
-import { useList } from '@/lib/use-list';
-
-const OPTION_LIMIT = 100;
+import { fetchDoctorOptions, fetchPatientOptions } from '@/lib/option-fetchers';
 
 export function BookAppointmentButton() {
   const router = useRouter();
@@ -25,11 +23,9 @@ export function BookAppointmentButton() {
   );
 }
 
-// Options are fetched only when the modal opens, so the page itself never pays for them.
+// Patients and doctors are searched on the server as the user types, so nothing large is ever loaded.
 function BookingModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const user = useCurrentUser();
-  const patients = useList<Patient>(user.role === 'ADMIN' ? '/patients' : null, { limit: OPTION_LIMIT });
-  const doctors = useList<Doctor>('/doctors', { limit: OPTION_LIMIT });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -49,8 +45,8 @@ function BookingModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
   return (
     <Modal title="Book appointment" eyebrow="NEW RECORD" onClose={onClose} onSubmit={submit}>
       <ErrorBanner message={error} />
-      {user.role === 'ADMIN' && <Select label="Patient" name="patientId" required placeholder="Select patient" options={patients.items.map((p) => ({ value: p.id, label: `${fullName(p)} · ${p.email}` }))} />}
-      <Select label="Doctor" name="doctorId" required placeholder="Select doctor" options={doctors.items.map((d) => ({ value: d.id, label: `Dr. ${fullName(d)} · ${d.specialty}` }))} />
+      {user.role === 'ADMIN' && <ComboboxField label="Patient" name="patientId" required placeholder="Search by name, email, phone or ID" fetchOptions={fetchPatientOptions} />}
+      <ComboboxField label="Doctor" name="doctorId" required placeholder="Search by name, specialty or email" fetchOptions={fetchDoctorOptions} />
       <Field label="Date and time" name="scheduledAt" type="datetime-local" required />
       <TextArea label="Reason for visit" name="reason" />
       <ModalActions onCancel={onClose} submitLabel="Book appointment" busy={busy} />

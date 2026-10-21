@@ -4,8 +4,17 @@ import { Repository } from 'typeorm';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 import { toContainsPattern } from '../common/utils/escape-like.util';
 import { paginate } from '../common/utils/pagination.util';
+import { applySort, SortMap } from '../common/utils/sort.util';
 import { ListDoctorsQueryDto } from './dto/list-doctors-query.dto';
 import { Doctor } from './entities/doctor.entity';
+
+const SORTABLE: SortMap = {
+  name: ['doctor.lastName', 'doctor.firstName'],
+  specialty: 'doctor.specialty',
+  email: 'doctor.email',
+  qualification: 'doctor.qualification',
+  status: 'doctor.isActive',
+};
 
 @Injectable()
 export class DoctorsRepository {
@@ -45,14 +54,15 @@ export class DoctorsRepository {
   }
 
   search(query: ListDoctorsQueryDto, includeInactive: boolean): Promise<PaginatedResult<Doctor>> {
-    const builder = this.repository.createQueryBuilder('doctor').orderBy('doctor.lastName', 'ASC').addOrderBy('doctor.firstName', 'ASC');
+    const builder = this.repository.createQueryBuilder('doctor');
     if (!includeInactive) builder.andWhere('doctor.isActive = true');
     if (query.q) {
       builder.andWhere(
-        `(doctor."firstName" || ' ' || doctor."lastName" ILIKE :pattern OR doctor.specialty ILIKE :pattern)`,
+        `(doctor."firstName" || ' ' || doctor."lastName" ILIKE :pattern OR doctor.specialty ILIKE :pattern OR doctor.email ILIKE :pattern)`,
         { pattern: toContainsPattern(query.q) },
       );
     }
+    applySort(builder, query, SORTABLE, { sortBy: 'name', order: 'asc' }, 'doctor.id');
     return paginate(builder, query);
   }
 }

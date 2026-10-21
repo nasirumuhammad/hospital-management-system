@@ -1,46 +1,26 @@
-import type { Paginated, SessionUser } from '@healthcare/types';
-import { EmptyState } from '@/components/ui/Feedback';
-import { LinkPagination } from '@/components/ui/LinkPagination';
+import { USER_ROLES, type Paginated, type SessionUser } from '@healthcare/types';
 import { ListPanel, PageHeader } from '@/components/ui/Page';
-import { StatusBadge } from '@/components/ui/StatusBadge';
-import { SearchFilter } from '@/components/ui/UrlFilters';
-import { formatDate } from '@/lib/format';
-import { DEFAULT_PAGE_SIZE, hrefBuilder, pageNumber, searchTerm, type PageSearchParams } from '@/lib/search-params';
+import { oneOf, tableQuery, type PageSearchParams } from '@/lib/search-params';
 import { serverApi } from '@/lib/server-api';
 import { getSessionUser } from '@/lib/session';
-import { AccountRowActions, AddAccountButton } from './_components/account-actions.client';
+import { AddAccountButton } from './_components/account-actions.client';
+import { AccountsTable } from './_components/accounts-table.client';
+import { ACCOUNT_SORTABLE, ACCOUNT_DEFAULT_SORT } from './_components/accounts-table.config';
 
 export default async function AccountsPage({ searchParams }: { searchParams: PageSearchParams }) {
   const me = await getSessionUser();
   if (!me) return null;
 
   const params = await searchParams;
-  const q = searchTerm(params.q);
-  const data = await serverApi<Paginated<SessionUser>>('/users', { query: { page: pageNumber(params.page), limit: DEFAULT_PAGE_SIZE, q } });
+  const { page, limit, q, sort, apiSort } = tableQuery(params, { sortable: ACCOUNT_SORTABLE, defaultSort: ACCOUNT_DEFAULT_SORT });
+  const role = oneOf(params.role, USER_ROLES);
+  const data = await serverApi<Paginated<SessionUser>>('/users', { query: { page, limit, q, role, ...apiSort } });
 
   return (
     <>
       <PageHeader title="Accounts" description="Sign-in accounts for staff and patients." extra={<AddAccountButton />} />
-      <ListPanel title="User accounts" description={`${data.total} accounts`} toolbar={<SearchFilter />}>
-        <div className="table-scroll">
-          <table>
-            <thead><tr><th>Name</th><th>Email address</th><th>Role</th><th>Email</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
-            <tbody>
-              {data.items.map((account) => (
-                <tr key={account.id}>
-                  <td><b>{account.name}</b></td><td>{account.email}</td>
-                  <td><StatusBadge value={account.role} /></td>
-                  <td>{account.emailVerified ? 'Verified' : 'Unverified'}</td>
-                  <td><StatusBadge value={account.isActive ? 'ACTIVE' : 'DISABLED'} /></td>
-                  <td>{formatDate(account.createdAt)}</td>
-                  <td><AccountRowActions account={account} isSelf={account.id === me.id} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {data.items.length === 0 && <EmptyState loading={false} label="accounts" />}
-        </div>
-        <LinkPagination data={data} hrefFor={hrefBuilder({ q })} />
+      <ListPanel title="User accounts" description={`${data.total.toLocaleString('en-US')} accounts`}>
+        <AccountsTable data={data} sort={sort} selfId={me.id} />
       </ListPanel>
     </>
   );

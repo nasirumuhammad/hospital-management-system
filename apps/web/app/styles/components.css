@@ -215,3 +215,60 @@ tbody tr:last-child td { border-bottom: 0; }
   .toolbar-controls select { flex: 1; }
   .modal { padding: 20px; }
 }
+
+/* ---------- Data table (TanStack, server-driven) ---------- */
+.data-table-root { transition: opacity var(--duration) var(--ease); }
+.data-table-root[data-pending] { opacity: 0.6; pointer-events: none; }
+.table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+.table-check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--foreground); white-space: nowrap; }
+.table-check input { width: 15px; height: 15px; accent-color: var(--primary); }
+.data-table thead th { position: sticky; top: 0; z-index: 1; }
+.table-sort { display: inline-flex; align-items: center; gap: 6px; padding: 0; background: none; border: 0; font: inherit; color: inherit; cursor: pointer; }
+.table-sort svg { opacity: 0.45; }
+.table-sort:hover, .table-sort[data-active] { color: var(--foreground); }
+.table-sort:hover svg, .table-sort[data-active] svg { opacity: 1; }
+.table-sort[data-active] svg { color: var(--primary); }
+.table-sort:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 4px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.pagination-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.page-size { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.page-size select { height: 30px; padding: 0 8px; background: var(--background); border: 1px solid var(--input); border-radius: var(--radius); font-size: 13px; color: var(--foreground); }
+.page-buttons { display: flex; align-items: center; gap: 4px; }
+.page-buttons .icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.page-number { min-width: 30px; height: 30px; padding: 0 8px; background: none; border: 1px solid transparent; border-radius: var(--radius); font-size: 13px; color: var(--muted-foreground); cursor: pointer; }
+.page-number:hover { background: var(--canvas); color: var(--foreground); }
+.page-number[data-active] { background: var(--primary-soft); border-color: var(--primary-line); color: var(--primary-soft-foreground); font-weight: 600; }
+
+.column-picker { position: relative; }
+.column-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 10; display: grid; gap: 2px; min-width: 180px; padding: 6px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-pop); }
+.column-menu label { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; }
+.column-menu label:hover { background: var(--canvas); }
+.column-menu input { accent-color: var(--primary); }
+
+/* ---------- Combobox (shadcn/Base UI structure, app tokens) ---------- */
+.combobox-field { position: relative; }
+.combobox-input { display: flex; align-items: center; min-height: 38px; background: var(--background); border: 1px solid var(--input); border-radius: var(--radius); box-shadow: var(--shadow-xs); transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease); }
+.combobox-input:hover { border-color: var(--border-strong); }
+.combobox-input:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--ring); }
+.field .combobox-input input { flex: 1; min-width: 0; min-height: 36px; padding: 0 4px 0 12px; border: 0; background: transparent; box-shadow: none; font-size: 14px; }
+.field .combobox-input input:focus { box-shadow: none; border: 0; }
+.combobox-addons { display: flex; align-items: center; gap: 2px; padding-right: 6px; }
+.combobox-trigger, .combobox-clear { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; background: none; border: 0; border-radius: var(--radius-sm); color: var(--muted-foreground); cursor: pointer; }
+.combobox-trigger:hover, .combobox-clear:hover { background: var(--canvas-strong); color: var(--foreground); }
+.combobox-proxy { position: absolute; left: 0; bottom: 0; width: 100%; height: 1px; opacity: 0; pointer-events: none; }
+
+.combobox-positioner { z-index: 60; /* above .modal-backdrop (20) */ }
+.combobox-content { width: var(--anchor-width); min-width: 240px; max-width: var(--available-width); max-height: min(var(--available-height), 320px); display: flex; flex-direction: column; overflow: hidden; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-pop); transform-origin: var(--transform-origin); animation: fade 120ms var(--ease) both; }
+.combobox-list { overflow-y: auto; overscroll-behavior: contain; padding: 4px; }
+.combobox-list:empty { display: none; }
+.combobox-item { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: var(--radius-sm); font-size: 13px; cursor: default; user-select: none; outline: none; }
+.combobox-item[data-highlighted] { background: var(--primary-soft); color: var(--primary-soft-foreground); }
+.combobox-item-text { display: grid; min-width: 0; }
+.combobox-item-text b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combobox-item-text small { font-size: 12px; color: var(--muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combobox-item-indicator { display: grid; place-items: center; color: var(--primary); flex-shrink: 0; }
+.combobox-empty { padding: 14px 12px; font-size: 13px; text-align: center; color: var(--muted-foreground); }
+.combobox-empty:empty { display: none; }
+.combobox-label { padding: 6px 10px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
+.combobox-separator { height: 1px; margin: 4px 0; background: var(--border); }

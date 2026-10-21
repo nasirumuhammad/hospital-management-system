@@ -3,7 +3,9 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository, SelectQueryBuilder } from 'typeorm';
 import { InvoiceStatus } from '../common/enums/invoice-status.enum';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
+import { toContainsPattern } from '../common/utils/escape-like.util';
 import { paginate } from '../common/utils/pagination.util';
+import { applySort, SortMap } from '../common/utils/sort.util';
 import { ListInvoicesQueryDto } from './dto/list-invoices-query.dto';
 import { Invoice } from './entities/invoice.entity';
 
@@ -13,6 +15,16 @@ export interface InvoiceScope {
 
 const PATIENT_COLUMNS = ['patient.id', 'patient.firstName', 'patient.lastName'];
 const OUTSTANDING_STATUSES = [InvoiceStatus.UNPAID, InvoiceStatus.PARTIALLY_PAID];
+
+const SORTABLE: SortMap = {
+  patient: ['patient.lastName', 'patient.firstName'],
+  description: 'i.description',
+  amount: 'i.amount',
+  amountPaid: 'i.amountPaid',
+  dueDate: 'i.dueDate',
+  status: 'i.status',
+  createdAt: 'i.createdAt',
+};
 
 @Injectable()
 export class InvoicesRepository {
@@ -46,9 +58,15 @@ export class InvoicesRepository {
   }
 
   search(query: ListInvoicesQueryDto, scope: InvoiceScope): Promise<PaginatedResult<Invoice>> {
-    const builder = this.scoped(scope).orderBy('i.createdAt', 'DESC');
+    const builder = this.scoped(scope);
     if (query.patientId) builder.andWhere('i.patientId = :patientId', { patientId: query.patientId });
     if (query.status) builder.andWhere('i.status = :status', { status: query.status });
+    if (query.q) {
+      builder.andWhere(`(patient."firstName" || ' ' || patient."lastName" ILIKE :pattern OR i.description ILIKE :pattern)`, {
+        pattern: toContainsPattern(query.q),
+      });
+    }
+    applySort(builder, query, SORTABLE, { sortBy: 'createdAt', order: 'desc' }, 'i.id');
     return paginate(builder, query);
   }
 

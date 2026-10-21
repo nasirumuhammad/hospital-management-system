@@ -1,17 +1,16 @@
 'use client';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
-import { USER_ROLES, type Doctor, type Patient, type SessionUser } from '@healthcare/types';
+import { USER_ROLES, type SessionUser } from '@healthcare/types';
 import { ErrorBanner } from '@/components/ui/Feedback';
+import { ComboboxField } from '@/components/ui/ComboboxField';
 import { Field, Select } from '@/components/ui/Fields';
 import { Modal, ModalActions } from '@/components/ui/Modal';
 import { api, errorMessage } from '@/lib/api-client';
-import { fullName, titleCase } from '@/lib/format';
+import { titleCase } from '@/lib/format';
 import { readForm } from '@/lib/form';
+import { fetchDoctorOptions, fetchPatientOptions } from '@/lib/option-fetchers';
 import { useRefreshAction } from '@/lib/use-action';
-import { useList } from '@/lib/use-list';
-
-const OPTION_LIMIT = 100;
 
 export function AddAccountButton() {
   const [open, setOpen] = useState(false);
@@ -72,7 +71,6 @@ function CreateAccountModal({ onClose, onSaved }: { onClose: () => void; onSaved
 
 function LinkProfileModal({ account, onClose }: { account: SessionUser; onClose: () => void }) {
   const isPatient = account.role === 'PATIENT';
-  const profiles = useList<Patient | Doctor>(isPatient ? '/patients' : '/doctors', { limit: OPTION_LIMIT });
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -94,8 +92,8 @@ function LinkProfileModal({ account, onClose }: { account: SessionUser; onClose:
     <Modal title={`Link ${account.name}`} eyebrow="PROFILE" onClose={onClose} onSubmit={submit}>
       <ErrorBanner message={error} />
       {done && <p className="success-banner">Profile linked.</p>}
-      <Select label={isPatient ? 'Patient profile' : 'Doctor profile'} name="profileId" required placeholder="Select profile"
-        options={profiles.items.map((p) => ({ value: p.id, label: `${fullName(p)} · ${p.email}` }))} />
+      <ComboboxField label={isPatient ? 'Patient profile' : 'Doctor profile'} name="profileId" required placeholder="Search by name, email or ID"
+        fetchOptions={isPatient ? fetchPatientOptions : fetchDoctorOptions} />
       <ModalActions onCancel={onClose} submitLabel="Link profile" busy={busy || done} />
     </Modal>
   );

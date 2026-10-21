@@ -22,7 +22,10 @@ export function Modal({ title, eyebrow = 'DETAILS', onClose, onSubmit, wide = fa
     openModals.push(titleId);
     const closeOnEscape = (event: KeyboardEvent) => {
       const isTopMost = openModals[openModals.length - 1] === titleId;
-      if (event.key === 'Escape' && isTopMost) onClose();
+      if (event.key !== 'Escape' || !isTopMost || event.defaultPrevented) return;
+      // Escape inside an open combobox/listbox only closes that popup, not the whole dialog.
+      if ((event.target as HTMLElement | null)?.closest?.('[aria-expanded="true"]')) return;
+      onClose();
     };
     document.addEventListener('keydown', closeOnEscape);
     return () => {

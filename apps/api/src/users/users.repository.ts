@@ -4,8 +4,18 @@ import { Repository } from 'typeorm';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 import { toContainsPattern } from '../common/utils/escape-like.util';
 import { paginate } from '../common/utils/pagination.util';
+import { applySort, SortMap } from '../common/utils/sort.util';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { User } from './entities/user.entity';
+
+const SORTABLE: SortMap = {
+  name: 'user.name',
+  email: 'user.email',
+  role: 'user.role',
+  status: 'user.isActive',
+  emailVerified: 'user.emailVerifiedAt',
+  createdAt: 'user.createdAt',
+};
 
 const INCREMENT_TOKEN_VERSION = () => '"tokenVersion" + 1';
 
@@ -42,11 +52,12 @@ export class UsersRepository {
   }
 
   search(query: ListUsersQueryDto): Promise<PaginatedResult<User>> {
-    const builder = this.repository.createQueryBuilder('user').orderBy('user.createdAt', 'DESC');
+    const builder = this.repository.createQueryBuilder('user');
     if (query.role) builder.andWhere('user.role = :role', { role: query.role });
     if (query.q) {
       builder.andWhere('(user.name ILIKE :pattern OR user.email ILIKE :pattern)', { pattern: toContainsPattern(query.q) });
     }
+    applySort(builder, query, SORTABLE, { sortBy: 'createdAt', order: 'desc' }, 'user.id');
     return paginate(builder, query);
   }
 

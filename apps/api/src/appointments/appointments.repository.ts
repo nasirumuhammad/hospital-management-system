@@ -5,6 +5,7 @@ import { AppointmentStatus } from '../common/enums/appointment-status.enum';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
 import { toContainsPattern } from '../common/utils/escape-like.util';
 import { paginate } from '../common/utils/pagination.util';
+import { applySort, SortMap } from '../common/utils/sort.util';
 import { OPEN_STATUSES } from './appointment-rules';
 import { ListAppointmentsQueryDto } from './dto/list-appointments-query.dto';
 import { Appointment } from './entities/appointment.entity';
@@ -16,6 +17,14 @@ export interface AppointmentScope {
 
 const PATIENT_COLUMNS = ['patient.id', 'patient.firstName', 'patient.lastName', 'patient.email', 'patient.phone'];
 const DOCTOR_COLUMNS = ['doctor.id', 'doctor.firstName', 'doctor.lastName', 'doctor.specialty'];
+
+const SORTABLE: SortMap = {
+  patient: ['patient.lastName', 'patient.firstName'],
+  doctor: ['doctor.lastName', 'doctor.firstName'],
+  scheduledAt: 'a.scheduledAt',
+  reason: 'a.reason',
+  status: 'a.status',
+};
 
 @Injectable()
 export class AppointmentsRepository {
@@ -42,13 +51,14 @@ export class AppointmentsRepository {
   }
 
   search(query: ListAppointmentsQueryDto, scope: AppointmentScope): Promise<PaginatedResult<Appointment>> {
-    const builder = this.scoped(scope).orderBy('a.scheduledAt', query.order === 'desc' ? 'DESC' : 'ASC');
+    const builder = this.scoped(scope);
     if (query.status) builder.andWhere('a.status = :status', { status: query.status });
     if (query.doctorId) builder.andWhere('a.doctorId = :doctorId', { doctorId: query.doctorId });
     if (query.patientId) builder.andWhere('a.patientId = :patientId', { patientId: query.patientId });
     if (query.from) builder.andWhere('a.scheduledAt >= :from', { from: query.from });
     if (query.to) builder.andWhere('a.scheduledAt <= :to', { to: query.to });
     if (query.q) this.applyTextSearch(builder, query.q);
+    applySort(builder, query, SORTABLE, { sortBy: 'scheduledAt', order: 'asc' }, 'a.id');
     return paginate(builder, query);
   }
 
@@ -87,7 +97,10 @@ export class AppointmentsRepository {
 
   private applyTextSearch(builder: SelectQueryBuilder<Appointment>, term: string): void {
     builder.andWhere(
-      `(patient."firstName" || ' ' || patient."lastName" ILIKE :pattern OR doctor."firstName" || ' ' || doctor."lastName" ILIKE :pattern)`,
+      `(patient."firstName" || ' ' || patient."lastName" ILIKE :pattern
+        OR patient.email ILIKE :pattern
+        OR doctor."firstName" || ' ' || doctor."lastName" ILIKE :pattern
+        OR a.reason ILIKE :pattern)`,
       { pattern: toContainsPattern(term) },
     );
   }

@@ -1,17 +1,14 @@
 'use client';
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
-import type { MedicalRecord, Patient } from '@healthcare/types';
+import { useMemo, useState } from 'react';
 import { ErrorBanner } from '@/components/ui/Feedback';
-import { Field, Select, TextArea } from '@/components/ui/Fields';
+import { ComboboxField } from '@/components/ui/ComboboxField';
+import { Field, TextArea } from '@/components/ui/Fields';
 import { Modal, ModalActions } from '@/components/ui/Modal';
 import { api, errorMessage } from '@/lib/api-client';
-import { formatDate, fullName } from '@/lib/format';
 import { readForm } from '@/lib/form';
+import { fetchPatientOptions, recordOptionsFetcher } from '@/lib/option-fetchers';
 import { useRefreshAction } from '@/lib/use-action';
-import { useList } from '@/lib/use-list';
-
-const OPTION_LIMIT = 100;
 
 export function NewPrescriptionButton() {
   const [open, setOpen] = useState(false);
@@ -25,9 +22,8 @@ export function NewPrescriptionButton() {
 }
 
 function PrescriptionModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const patients = useList<Patient>('/patients', { limit: OPTION_LIMIT });
   const [patientId, setPatientId] = useState('');
-  const records = useList<MedicalRecord>(patientId ? '/medical-records' : null, { patientId, limit: OPTION_LIMIT });
+  const fetchRecords = useMemo(() => recordOptionsFetcher(patientId), [patientId]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -47,8 +43,8 @@ function PrescriptionModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   return (
     <Modal title="New prescription" eyebrow="CLINICAL" onClose={onClose} onSubmit={submit} wide>
       <ErrorBanner message={error} />
-      <Select label="Patient" name="patientId" required placeholder="Select patient" onChange={setPatientId} options={patients.items.map((p) => ({ value: p.id, label: `${fullName(p)} · ${p.email}` }))} />
-      {patientId && <Select key={patientId} label="Related medical record (optional)" name="medicalRecordId" placeholder="None" options={records.items.map((r) => ({ value: r.id, label: `${r.diagnosis} · ${formatDate(r.createdAt)}` }))} />}
+      <ComboboxField label="Patient" name="patientId" required placeholder="Search by name, email, phone or ID" fetchOptions={fetchPatientOptions} onValueChange={setPatientId} />
+      {patientId && <ComboboxField key={patientId} label="Related medical record (optional)" name="medicalRecordId" placeholder="Search diagnoses…" fetchOptions={fetchRecords} />}
       <Field label="Medication" name="medication" required />
       <div className="field-row"><Field label="Dosage" name="dosage" required /><Field label="Frequency" name="frequency" required /></div>
       <Field label="Duration" name="duration" required />

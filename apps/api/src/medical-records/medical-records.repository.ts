@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
+import { toContainsPattern } from '../common/utils/escape-like.util';
 import { paginate } from '../common/utils/pagination.util';
+import { applySort, SortMap } from '../common/utils/sort.util';
 import { ListMedicalRecordsQueryDto } from './dto/list-medical-records-query.dto';
 import { MedicalRecord } from './entities/medical-record.entity';
 
@@ -13,6 +15,13 @@ export interface RecordScope {
 
 const PATIENT_COLUMNS = ['patient.id', 'patient.firstName', 'patient.lastName'];
 const DOCTOR_COLUMNS = ['doctor.id', 'doctor.firstName', 'doctor.lastName', 'doctor.specialty'];
+
+const SORTABLE: SortMap = {
+  patient: ['patient.lastName', 'patient.firstName'],
+  doctor: ['doctor.lastName', 'doctor.firstName'],
+  diagnosis: 'r.diagnosis',
+  createdAt: 'r.createdAt',
+};
 
 @Injectable()
 export class MedicalRecordsRepository {
@@ -39,8 +48,17 @@ export class MedicalRecordsRepository {
   }
 
   search(query: ListMedicalRecordsQueryDto, scope: RecordScope): Promise<PaginatedResult<MedicalRecord>> {
-    const builder = this.scoped(scope).orderBy('r.createdAt', 'DESC');
+    const builder = this.scoped(scope);
     if (query.patientId) builder.andWhere('r.patientId = :patientId', { patientId: query.patientId });
+    if (query.q) {
+      builder.andWhere(
+        `(patient."firstName" || ' ' || patient."lastName" ILIKE :pattern
+          OR doctor."firstName" || ' ' || doctor."lastName" ILIKE :pattern
+          OR r.diagnosis ILIKE :pattern)`,
+        { pattern: toContainsPattern(query.q) },
+      );
+    }
+    applySort(builder, query, SORTABLE, { sortBy: 'createdAt', order: 'desc' }, 'r.id');
     return paginate(builder, query);
   }
 
