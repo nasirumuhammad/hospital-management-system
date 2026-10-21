@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type { AppointmentStatus, UserRole } from '@healthcare/types';
 import { Field } from '@/components/ui/Fields';
 import { ErrorBanner } from '@/components/ui/Feedback';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal, ModalActions } from '@/components/ui/Modal';
 import { api, errorMessage } from '@/lib/api-client';
 import { formatDateTime, titleCase, toIsoFromLocalInput } from '@/lib/format';
@@ -29,6 +30,28 @@ export function AppointmentRowActions({ appointment, role }: { appointment: RowA
   const open = ['PENDING', 'CONFIRMED'].includes(appointment.status);
   const nextStatuses = NEXT_STATUSES[appointment.status];
   const base = `/appointments/${appointment.id}`;
+  const confirmAction = useConfirmDialog();
+
+  async function cancelAppointment() {
+    const confirmed = await confirmAction({
+      title: 'Cancel appointment',
+      message: 'Cancel this appointment?',
+      confirmLabel: 'Cancel appointment',
+      cancelLabel: 'Keep appointment',
+      tone: 'danger',
+    });
+    if (confirmed) await run(() => api(`${base}/cancel`, { method: 'POST' }));
+  }
+
+  async function deleteAppointment() {
+    const confirmed = await confirmAction({
+      title: 'Delete appointment',
+      message: 'Delete this appointment record?',
+      confirmLabel: 'Delete',
+      tone: 'danger',
+    });
+    if (confirmed) await run(() => api(base, { method: 'DELETE' }));
+  }
 
   return (
     <>
@@ -42,10 +65,10 @@ export function AppointmentRowActions({ appointment, role }: { appointment: RowA
         )}
         {role === 'ADMIN' && open && <button className="btn secondary small" onClick={() => setRescheduling(true)}>Reschedule</button>}
         {role === 'PATIENT' && open && (
-          <button className="btn danger small" onClick={() => window.confirm('Cancel this appointment?') && void run(() => api(`${base}/cancel`, { method: 'POST' }))}>Cancel</button>
+          <button className="btn danger small" onClick={() => void cancelAppointment()}>Cancel</button>
         )}
         {role === 'ADMIN' && (
-          <button className="btn danger small" onClick={() => window.confirm('Delete this appointment record?') && void run(() => api(base, { method: 'DELETE' }))}>Delete</button>
+          <button className="btn danger small" onClick={() => void deleteAppointment()}>Delete</button>
         )}
       </div>
       <ErrorBanner message={error} onDismiss={() => setError('')} />

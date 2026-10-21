@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { Doctor } from '@healthcare/types';
 import { ErrorBanner } from '@/components/ui/Feedback';
 import { Field } from '@/components/ui/Fields';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal, ModalActions } from '@/components/ui/Modal';
 import { api, errorMessage } from '@/lib/api-client';
 import { fullName } from '@/lib/format';
@@ -26,12 +27,24 @@ export function AddDoctorButton() {
 export function DoctorRowActions({ doctor }: { doctor: Doctor }) {
   const [editing, setEditing] = useState(false);
   const { error, setError, run, refresh } = useRefreshAction();
+  const confirmAction = useConfirmDialog();
+
+  async function removeDoctor() {
+    const confirmed = await confirmAction({
+      title: 'Remove doctor',
+      message: `Remove Dr. ${fullName(doctor)}? Their history is preserved.`,
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    });
+    if (confirmed) await run(() => api(`/doctors/${doctor.id}`, { method: 'DELETE' }));
+  }
+
   return (
     <>
       <div className="row-actions">
         <button className="btn secondary small" onClick={() => setEditing(true)}>Edit</button>
         <button className="btn secondary small" onClick={() => void run(() => api(`/doctors/${doctor.id}`, { method: 'PATCH', body: { isActive: !doctor.isActive } }))}>{doctor.isActive ? 'Deactivate' : 'Activate'}</button>
-        <button className="btn danger small" onClick={() => window.confirm(`Remove Dr. ${fullName(doctor)}? Their history is preserved.`) && void run(() => api(`/doctors/${doctor.id}`, { method: 'DELETE' }))}>Remove</button>
+        <button className="btn danger small" onClick={() => void removeDoctor()}>Remove</button>
       </div>
       <ErrorBanner message={error} onDismiss={() => setError('')} />
       {editing && <DoctorModal doctor={doctor} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); refresh(); }} />}

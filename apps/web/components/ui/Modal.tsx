@@ -2,6 +2,10 @@
 import { X } from 'lucide-react';
 import { useEffect, useId } from 'react';
 
+// Open modals, oldest first. Escape closes only the top-most one, so a confirmation
+// opened over another modal does not dismiss both.
+const openModals: string[] = [];
+
 interface ModalProps {
   title: string;
   eyebrow?: string;
@@ -15,10 +19,17 @@ export function Modal({ title, eyebrow = 'DETAILS', onClose, onSubmit, wide = fa
   const titleId = useId();
 
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
+    openModals.push(titleId);
+    const closeOnEscape = (event: KeyboardEvent) => {
+      const isTopMost = openModals[openModals.length - 1] === titleId;
+      if (event.key === 'Escape' && isTopMost) onClose();
+    };
     document.addEventListener('keydown', closeOnEscape);
-    return () => document.removeEventListener('keydown', closeOnEscape);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape);
+      openModals.splice(openModals.indexOf(titleId), 1);
+    };
+  }, [onClose, titleId]);
 
   const header = (
     <div className="modal-head">

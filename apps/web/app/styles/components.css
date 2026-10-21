@@ -194,6 +194,7 @@ tbody tr:last-child td { border-bottom: 0; }
 .modal { width: min(100%, 480px); max-height: calc(100vh - 40px); overflow: auto; padding: 24px; background: var(--background); border-radius: var(--radius-xl); box-shadow: var(--shadow-pop); animation: pop 200ms var(--ease) both; }
 .modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
 .modal-head h2 { margin-top: 10px; font: 400 28px/1.1 var(--font-display); letter-spacing: -0.01em; }
+.confirm-message { margin: 0 0 18px; color: var(--muted-foreground, inherit); line-height: 1.5; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; padding-top: 18px; border-top: 1px solid var(--border); }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }

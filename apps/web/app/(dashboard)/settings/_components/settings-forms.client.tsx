@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type { SessionUser } from '@healthcare/types';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ErrorBanner, SuccessBanner } from '@/components/ui/Feedback';
 import { Field } from '@/components/ui/Fields';
 import { api, errorMessage } from '@/lib/api-client';
@@ -72,9 +73,16 @@ export function ChangePasswordForm() {
 
 export function SignOutEverywhereButton() {
   const { logout } = useAuth();
+  const confirmAction = useConfirmDialog();
 
   async function signOutEverywhere() {
-    if (!window.confirm('Sign out of every device, including this one?')) return;
+    const confirmed = await confirmAction({
+      title: 'Sign out of all devices',
+      message: 'Sign out of every device, including this one?',
+      confirmLabel: 'Sign out everywhere',
+      tone: 'danger',
+    });
+    if (!confirmed) return;
     await api('/auth/logout-all', { method: 'POST' }).catch(() => undefined);
     await logout();
   }

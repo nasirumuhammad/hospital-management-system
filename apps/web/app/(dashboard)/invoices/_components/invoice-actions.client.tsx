@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { PAYMENT_METHODS, type Invoice, type Patient } from '@healthcare/types';
 import { useCurrentUser } from '@/components/auth/AuthProvider';
 import { ErrorBanner } from '@/components/ui/Feedback';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field, Select } from '@/components/ui/Fields';
 import { Modal, ModalActions } from '@/components/ui/Modal';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -74,6 +75,7 @@ function InvoiceDetailModal({ id, onClose, onChanged }: { id: string; onClose: (
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const confirmAction = useConfirmDialog();
 
   useEffect(() => {
     api<Invoice>(`/invoices/${id}`).then(setInvoice).catch((failure) => setError(errorMessage(failure)));
@@ -90,6 +92,16 @@ function InvoiceDetailModal({ id, onClose, onChanged }: { id: string; onClose: (
     } finally {
       setBusy(false);
     }
+  }
+
+  async function voidInvoice() {
+    const confirmed = await confirmAction({
+      title: 'Void invoice',
+      message: 'Void this invoice? It can no longer receive payments.',
+      confirmLabel: 'Void invoice',
+      tone: 'danger',
+    });
+    if (confirmed) await mutate(() => api<Invoice>(`/invoices/${id}/void`, { method: 'POST' }));
   }
 
   function recordPayment(event: React.FormEvent<HTMLFormElement>) {
@@ -130,7 +142,7 @@ function InvoiceDetailModal({ id, onClose, onChanged }: { id: string; onClose: (
             </form>
           )}
           {isAdmin && invoice.status === 'UNPAID' && (
-            <button className="btn danger small" disabled={busy} onClick={() => window.confirm('Void this invoice?') && void mutate(() => api<Invoice>(`/invoices/${id}/void`, { method: 'POST' }))}>Void invoice</button>
+            <button className="btn danger small" disabled={busy} onClick={() => void voidInvoice()}>Void invoice</button>
           )}
         </>
       )}
