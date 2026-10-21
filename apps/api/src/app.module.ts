@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { Module, RequestMethod } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
@@ -29,6 +29,9 @@ const SERVER_ERROR_STATUS = 500;
     LoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<EnvironmentVariables, true>) => ({
+        // nestjs-pino defaults to "*", which Nest 11 / Express 5 rewrites to the legacy "/api/*"
+        // and warns about on every start. "{*splat}" is the Express 5 spelling of "match everything".
+        forRoutes: [{ path: "{*splat}", method: RequestMethod.ALL }],
         pinoHttp: {
           level: config.get("LOG_LEVEL", { infer: true }),
           genReqId: (_request, response) => {
