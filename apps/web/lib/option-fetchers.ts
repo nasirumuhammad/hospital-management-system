@@ -1,4 +1,4 @@
-import type { Doctor, MedicalRecord, Paginated, Patient } from '@healthcare/types';
+import type { Doctor, Drug, MedicalRecord, Paginated, Patient, Visit } from '@healthcare/types';
 import type { ComboOption } from '@/components/ui/ComboboxField';
 import { api } from './api-client';
 import { formatDate, fullName } from './format';

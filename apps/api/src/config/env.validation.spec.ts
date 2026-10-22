@@ -18,6 +18,11 @@ describe('validateEnv', () => {
     expect(validateEnv({ ...valid, REQUIRE_EMAIL_VERIFICATION: 'true' }).REQUIRE_EMAIL_VERIFICATION).toBe(true);
   });
 
+  it('rejects malformed boolean values instead of silently treating them as false', () => {
+    expect(() => validateEnv({ ...valid, DATABASE_SSL: 'yes' })).toThrow(/DATABASE_SSL/);
+    expect(() => validateEnv({ ...valid, REQUIRE_EMAIL_VERIFICATION: 'sometimes' })).toThrow(/REQUIRE_EMAIL_VERIFICATION/);
+  });
+
   it('rejects short secrets and missing database configuration', () => {
     expect(() => validateEnv({ ...valid, JWT_SECRET: 'short' })).toThrow(/JWT_SECRET/);
     expect(() => validateEnv({ JWT_SECRET: valid.JWT_SECRET })).toThrow(/DATABASE_URL/);

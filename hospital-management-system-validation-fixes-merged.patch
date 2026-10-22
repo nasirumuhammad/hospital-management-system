@@ -1,0 +1,466 @@
+diff --git a/apps/api/src/appointments/dto/create-appointment.dto.ts b/apps/api/src/appointments/dto/create-appointment.dto.ts
+index 44065cf..60fa5cd 100644
+--- a/apps/api/src/appointments/dto/create-appointment.dto.ts
++++ b/apps/api/src/appointments/dto/create-appointment.dto.ts
+@@ -1,11 +1,12 @@
+-import { IsISO8601, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
++import { IsISO8601, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+ import { Trimmed } from '../../common/validators/trimmed.decorator';
++import { IsFutureDateTime } from '../../common/validators/date.decorators';
+ 
+ const MAX_REASON_LENGTH = 2000;
+ 
+ export class CreateAppointmentDto {
+   @IsOptional() @IsUUID() patientId?: string;
+   @IsUUID() doctorId: string;
+-  @IsISO8601() scheduledAt: string;
+-  @IsOptional() @Trimmed() @IsString() @MaxLength(MAX_REASON_LENGTH) reason?: string;
++  @IsISO8601({ strict: true, strictSeparator: true }) @IsFutureDateTime() scheduledAt: string;
++  @IsOptional() @Trimmed() @IsString() @IsNotEmpty() @MaxLength(MAX_REASON_LENGTH) reason?: string;
+ }
+diff --git a/apps/api/src/appointments/dto/list-appointments-query.dto.ts b/apps/api/src/appointments/dto/list-appointments-query.dto.ts
+index 9902019..6a1d796 100644
+--- a/apps/api/src/appointments/dto/list-appointments-query.dto.ts
++++ b/apps/api/src/appointments/dto/list-appointments-query.dto.ts
+@@ -1,4 +1,5 @@
+ import { IsEnum, IsISO8601, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
++import { IsDateRangeEnd } from '../../common/validators/date.decorators';
+ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+ import { AppointmentStatus } from '../../common/enums/appointment-status.enum';
+ 
+@@ -7,6 +8,6 @@ export class ListAppointmentsQueryDto extends PaginationQueryDto {
+   @IsOptional() @IsEnum(AppointmentStatus) status?: AppointmentStatus;
+   @IsOptional() @IsUUID() doctorId?: string;
+   @IsOptional() @IsUUID() patientId?: string;
+-  @IsOptional() @IsISO8601() from?: string;
+-  @IsOptional() @IsISO8601() to?: string;
++  @IsOptional() @IsISO8601({ strict: true, strictSeparator: true }) from?: string;
++  @IsOptional() @IsISO8601({ strict: true, strictSeparator: true }) @IsDateRangeEnd() to?: string;
+ }
+diff --git a/apps/api/src/appointments/dto/reschedule-appointment.dto.ts b/apps/api/src/appointments/dto/reschedule-appointment.dto.ts
+index 4b10191..751a9b4 100644
+--- a/apps/api/src/appointments/dto/reschedule-appointment.dto.ts
++++ b/apps/api/src/appointments/dto/reschedule-appointment.dto.ts
+@@ -1,9 +1,10 @@
+-import { IsISO8601, IsOptional, IsString, MaxLength } from 'class-validator';
++import { IsISO8601, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+ import { Trimmed } from '../../common/validators/trimmed.decorator';
++import { IsFutureDateTime } from '../../common/validators/date.decorators';
+ 
+ const MAX_REASON_LENGTH = 2000;
+ 
+ export class RescheduleAppointmentDto {
+-  @IsISO8601() scheduledAt: string;
+-  @IsOptional() @Trimmed() @IsString() @MaxLength(MAX_REASON_LENGTH) reason?: string;
++  @IsISO8601({ strict: true, strictSeparator: true }) @IsFutureDateTime() scheduledAt: string;
++  @IsOptional() @Trimmed() @IsString() @IsNotEmpty() @MaxLength(MAX_REASON_LENGTH) reason?: string;
+ }
+diff --git a/apps/api/src/audit/dto/list-audit-logs-query.dto.ts b/apps/api/src/audit/dto/list-audit-logs-query.dto.ts
+index ad12e9f..1b2d826 100644
+--- a/apps/api/src/audit/dto/list-audit-logs-query.dto.ts
++++ b/apps/api/src/audit/dto/list-audit-logs-query.dto.ts
+@@ -1,4 +1,5 @@
+ import { IsEnum, IsISO8601, IsOptional, IsUUID } from 'class-validator';
++import { IsDateRangeEnd } from '../../common/validators/date.decorators';
+ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+ import { AuditAction } from '../../common/enums/audit-action.enum';
+ import { AuditTarget } from '../../common/enums/audit-target.enum';
+@@ -7,6 +8,6 @@ export class ListAuditLogsQueryDto extends PaginationQueryDto {
+   @IsOptional() @IsEnum(AuditAction) action?: AuditAction;
+   @IsOptional() @IsEnum(AuditTarget) targetType?: AuditTarget;
+   @IsOptional() @IsUUID() actorId?: string;
+-  @IsOptional() @IsISO8601() from?: string;
+-  @IsOptional() @IsISO8601() to?: string;
++  @IsOptional() @IsISO8601({ strict: true, strictSeparator: true }) from?: string;
++  @IsOptional() @IsISO8601({ strict: true, strictSeparator: true }) @IsDateRangeEnd() to?: string;
+ }
+diff --git a/apps/api/src/common/validators/date.decorators.spec.ts b/apps/api/src/common/validators/date.decorators.spec.ts
+new file mode 100644
+index 0000000..3499298
+--- /dev/null
++++ b/apps/api/src/common/validators/date.decorators.spec.ts
+@@ -0,0 +1,59 @@
++import { plainToInstance } from 'class-transformer';
++import { validate } from 'class-validator';
++import { CreatePatientDto } from '../../patients/dto/create-patient.dto';
++import { CreateInvoiceDto } from '../../invoices/dto/create-invoice.dto';
++import { CreateAppointmentDto } from '../../appointments/dto/create-appointment.dto';
++import { ListAppointmentsQueryDto } from '../../appointments/dto/list-appointments-query.dto';
++import { CreateDoctorDto } from '../../doctors/dto/create-doctor.dto';
++
++describe('strict input validation', () => {
++  const patient = (dateOfBirth: string) => plainToInstance(CreatePatientDto, {
++    firstName: 'Amina', lastName: 'Bello', email: 'amina@example.com', dateOfBirth,
++  });
++
++  it('rejects a date of birth in the future', async () => {
++    const tomorrow = new Date();
++    tomorrow.setDate(tomorrow.getDate() + 1);
++    const value = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
++    const errors = await validate(patient(value));
++    expect(errors.some((error) => error.property === 'dateOfBirth')).toBe(true);
++  });
++
++  it.each(['2025-02-29', '2024-13-01', '2024-04-31', 'tomorrow'])('rejects invalid calendar date %s', async (dateOfBirth) => {
++    const errors = await validate(patient(dateOfBirth));
++    expect(errors.some((error) => error.property === 'dateOfBirth')).toBe(true);
++  });
++
++  it('accepts a valid past date of birth', async () => {
++    const errors = await validate(patient('1998-07-14'));
++    expect(errors.some((error) => error.property === 'dateOfBirth')).toBe(false);
++  });
++
++  it.each(['2025-02-29', '2024-13-01', '2024-04-31'])('rejects invalid invoice due date %s', async (dueDate) => {
++    const dto = plainToInstance(CreateInvoiceDto, {
++      patientId: 'a2d4c5f0-5c3e-4a5d-9a2d-9a2c4d6f8a10', description: 'Consultation', amount: 100, dueDate,
++    });
++    const errors = await validate(dto);
++    expect(errors.some((error) => error.property === 'dueDate')).toBe(true);
++  });
++
++  it.each(['123', 'not a phone', '12345678901234567890'])('rejects malformed phone number %s', async (phone) => {
++    const dto = plainToInstance(CreateDoctorDto, { firstName: 'Amina', lastName: 'Bello', email: 'amina@example.com', specialty: 'General', phone });
++    const errors = await validate(dto);
++    expect(errors.some((error) => error.property === 'phone')).toBe(true);
++  });
++
++  it('rejects query date ranges where from is later than to', async () => {
++    const dto = plainToInstance(ListAppointmentsQueryDto, { from: '2026-10-22T12:00:00.000Z', to: '2026-10-21T12:00:00.000Z' });
++    const errors = await validate(dto);
++    expect(errors.some((error) => error.property === 'to')).toBe(true);
++  });
++
++  it('rejects appointment timestamps in the past', async () => {
++    const dto = plainToInstance(CreateAppointmentDto, {
++      doctorId: 'a2d4c5f0-5c3e-4a5d-9a2d-9a2c4d6f8a10', scheduledAt: '2020-01-01T10:00:00.000Z',
++    });
++    const errors = await validate(dto);
++    expect(errors.some((error) => error.property === 'scheduledAt')).toBe(true);
++  });
++});
+diff --git a/apps/api/src/common/validators/date.decorators.ts b/apps/api/src/common/validators/date.decorators.ts
+new file mode 100644
+index 0000000..c376d4b
+--- /dev/null
++++ b/apps/api/src/common/validators/date.decorators.ts
+@@ -0,0 +1,79 @@
++import { registerDecorator, ValidationArguments, ValidationOptions } from 'class-validator';
++
++const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
++
++function parseDateOnly(value: unknown): Date | null {
++  if (typeof value !== 'string') return null;
++  const match = DATE_ONLY.exec(value);
++  if (!match) return null;
++  const year = Number(match[1]);
++  const month = Number(match[2]);
++  const day = Number(match[3]);
++  const date = new Date(Date.UTC(year, month - 1, day));
++  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
++  return date;
++}
++
++export function IsValidDateOnly(options?: { notInFuture?: boolean }, validationOptions?: ValidationOptions): PropertyDecorator {
++  return (target, propertyName) => registerDecorator({
++    name: 'isValidDateOnly',
++    target: target.constructor,
++    propertyName: propertyName.toString(),
++    options: validationOptions,
++    validator: {
++      validate(value: unknown): boolean {
++        const parsed = parseDateOnly(value);
++        if (!parsed) return false;
++        if (!options?.notInFuture) return true;
++        const parts = new Intl.DateTimeFormat('en', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
++        const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((item) => item.type === type)?.value ?? '';
++        const todayInNigeria = `${part('year')}-${part('month')}-${part('day')}`;
++        return typeof value === 'string' && value <= todayInNigeria;
++      },
++      defaultMessage(args: ValidationArguments): string {
++        if (options?.notInFuture) return `${args.property} must be a real date on or before today`;
++        return `${args.property} must be a real date in YYYY-MM-DD format`;
++      },
++    },
++  });
++}
++
++export function IsFutureDateTime(validationOptions?: ValidationOptions): PropertyDecorator {
++  return (target, propertyName) => registerDecorator({
++    name: 'isFutureDateTime',
++    target: target.constructor,
++    propertyName: propertyName.toString(),
++    options: validationOptions,
++    validator: {
++      validate(value: unknown): boolean {
++        if (typeof value !== 'string' || value.trim() === '') return false;
++        const timestamp = Date.parse(value);
++        return Number.isFinite(timestamp) && timestamp > Date.now();
++      },
++      defaultMessage(args: ValidationArguments): string {
++        return `${args.property} must be a valid date and time in the future`;
++      },
++    },
++  });
++}
++
++export function IsDateRangeEnd(validationOptions?: ValidationOptions): PropertyDecorator {
++  return (target, propertyName) => registerDecorator({
++    name: 'isDateRangeEnd',
++    target: target.constructor,
++    propertyName: propertyName.toString(),
++    options: validationOptions,
++    validator: {
++      validate(value: unknown, args: ValidationArguments): boolean {
++        const from = (args.object as Record<string, unknown>).from;
++        if (from === undefined || from === null || from === '' || value === undefined || value === null || value === '') return true;
++        const fromTime = Date.parse(String(from));
++        const toTime = Date.parse(String(value));
++        return Number.isFinite(fromTime) && Number.isFinite(toTime) && fromTime <= toTime;
++      },
++      defaultMessage(args: ValidationArguments): string {
++        return `${args.property} must be on or after from`;
++      },
++    },
++  });
++}
+diff --git a/apps/api/src/common/validators/phone.decorator.ts b/apps/api/src/common/validators/phone.decorator.ts
+new file mode 100644
+index 0000000..a28c35d
+--- /dev/null
++++ b/apps/api/src/common/validators/phone.decorator.ts
+@@ -0,0 +1,14 @@
++import { applyDecorators } from '@nestjs/common';
++import { IsString, MaxLength, Matches } from 'class-validator';
++import { Trimmed } from './trimmed.decorator';
++
++// Accept common local and international phone formatting without accepting letters or short values.
++export function IsPhoneLike() {
++  return applyDecorators(
++    Trimmed(),
++    IsString(),
++    MaxLength(30),
++    Matches(/^\+?[0-9](?:[0-9\s().-]*[0-9])?$/, { message: 'phone must contain only digits and common phone separators' }),
++    Matches(/^(?=(?:\D*\d){7,15}\D*$).+$/, { message: 'phone must contain between 7 and 15 digits' }),
++  );
++}
+diff --git a/apps/api/src/config/env.validation.spec.ts b/apps/api/src/config/env.validation.spec.ts
+index a56185a..a52c6fe 100644
+--- a/apps/api/src/config/env.validation.spec.ts
++++ b/apps/api/src/config/env.validation.spec.ts
+@@ -18,6 +18,11 @@ describe('validateEnv', () => {
+     expect(validateEnv({ ...valid, REQUIRE_EMAIL_VERIFICATION: 'true' }).REQUIRE_EMAIL_VERIFICATION).toBe(true);
+   });
+ 
++  it('rejects malformed boolean values instead of silently treating them as false', () => {
++    expect(() => validateEnv({ ...valid, DATABASE_SSL: 'yes' })).toThrow(/DATABASE_SSL/);
++    expect(() => validateEnv({ ...valid, REQUIRE_EMAIL_VERIFICATION: 'sometimes' })).toThrow(/REQUIRE_EMAIL_VERIFICATION/);
++  });
++
+   it('rejects short secrets and missing database configuration', () => {
+     expect(() => validateEnv({ ...valid, JWT_SECRET: 'short' })).toThrow(/JWT_SECRET/);
+     expect(() => validateEnv({ JWT_SECRET: valid.JWT_SECRET })).toThrow(/DATABASE_URL/);
+diff --git a/apps/api/src/config/env.validation.ts b/apps/api/src/config/env.validation.ts
+index aa64f00..8d2ba1d 100644
+--- a/apps/api/src/config/env.validation.ts
++++ b/apps/api/src/config/env.validation.ts
+@@ -14,8 +14,11 @@ import {
+ 
+ const MIN_SECRET_LENGTH = 22;
+ const PLACEHOLDER_PREFIX = "replace_with";
+-const toBoolean = ({ value }: { value: unknown }) =>
+-  value === true || value === "true";
++const toBoolean = ({ value }: { value: unknown }) => {
++  if (value === true || value === 'true') return true;
++  if (value === false || value === 'false') return false;
++  return value;
++};
+ 
+ export class EnvironmentVariables {
+   @IsIn(["development", "production", "test"])
+diff --git a/apps/api/src/doctors/dto/create-doctor.dto.ts b/apps/api/src/doctors/dto/create-doctor.dto.ts
+index ba092f1..d6c1325 100644
+--- a/apps/api/src/doctors/dto/create-doctor.dto.ts
++++ b/apps/api/src/doctors/dto/create-doctor.dto.ts
+@@ -1,12 +1,13 @@
+ import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+ import { NormalizedEmail } from '../../common/validators/normalized-email.decorator';
+ import { Trimmed } from '../../common/validators/trimmed.decorator';
++import { IsPhoneLike } from '../../common/validators/phone.decorator';
+ 
+ export class CreateDoctorDto {
+   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) firstName: string;
+   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) lastName: string;
+   @NormalizedEmail() email: string;
+   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(120) specialty: string;
+-  @IsOptional() @Trimmed() @IsString() @MaxLength(30) phone?: string | null;
++  @IsOptional() @IsPhoneLike() phone?: string | null;
+   @IsOptional() @Trimmed() @IsString() @MaxLength(180) qualification?: string | null;
+ }
+diff --git a/apps/api/src/doctors/dto/list-doctors-query.dto.ts b/apps/api/src/doctors/dto/list-doctors-query.dto.ts
+index 926a194..783728e 100644
+--- a/apps/api/src/doctors/dto/list-doctors-query.dto.ts
++++ b/apps/api/src/doctors/dto/list-doctors-query.dto.ts
+@@ -6,7 +6,7 @@ export class ListDoctorsQueryDto extends PaginationQueryDto {
+   @IsOptional() @IsString() @MaxLength(100) q?: string;
+ 
+   @IsOptional()
+-  @Transform(({ value }) => value === true || value === 'true')
++  @Transform(({ value }) => value === true || value === 'true' ? true : value === false || value === 'false' ? false : value)
+   @IsBoolean()
+   includeInactive?: boolean;
+ }
+diff --git a/apps/api/src/invoices/dto/create-invoice.dto.ts b/apps/api/src/invoices/dto/create-invoice.dto.ts
+index d828027..71b1df0 100644
+--- a/apps/api/src/invoices/dto/create-invoice.dto.ts
++++ b/apps/api/src/invoices/dto/create-invoice.dto.ts
+@@ -1,6 +1,7 @@
+ import { Type } from 'class-transformer';
+-import { IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
++import { IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+ import { Trimmed } from '../../common/validators/trimmed.decorator';
++import { IsValidDateOnly } from '../../common/validators/date.decorators';
+ 
+ const MAX_AMOUNT = 9_999_999_999.99;
+ 
+@@ -9,5 +10,5 @@ export class CreateInvoiceDto {
+   @IsOptional() @IsUUID() appointmentId?: string;
+   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(180) description: string;
+   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01) @Max(MAX_AMOUNT) amount: number;
+-  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'dueDate must be a YYYY-MM-DD date' }) dueDate?: string;
++  @IsOptional() @IsValidDateOnly() dueDate?: string;
+ }
+diff --git a/apps/api/src/invoices/dto/record-payment.dto.ts b/apps/api/src/invoices/dto/record-payment.dto.ts
+index 37d6cd2..df9e053 100644
+--- a/apps/api/src/invoices/dto/record-payment.dto.ts
++++ b/apps/api/src/invoices/dto/record-payment.dto.ts
+@@ -1,5 +1,5 @@
+ import { Type } from 'class-transformer';
+-import { IsEnum, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
++import { IsEnum, IsNumber, IsNotEmpty, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+ import { PaymentMethod } from '../../common/enums/payment-method.enum';
+ import { Trimmed } from '../../common/validators/trimmed.decorator';
+ 
+@@ -8,5 +8,5 @@ const MAX_AMOUNT = 9_999_999_999.99;
+ export class RecordPaymentDto {
+   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01) @Max(MAX_AMOUNT) amount: number;
+   @IsEnum(PaymentMethod) method: PaymentMethod;
+-  @IsOptional() @Trimmed() @IsString() @MaxLength(100) reference?: string;
++  @IsOptional() @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) reference?: string;
+ }
+diff --git a/apps/web/app/(dashboard)/appointments/_components/book-appointment.client.tsx b/apps/web/app/(dashboard)/appointments/_components/book-appointment.client.tsx
+index 2168907..29c2729 100644
+--- a/apps/web/app/(dashboard)/appointments/_components/book-appointment.client.tsx
++++ b/apps/web/app/(dashboard)/appointments/_components/book-appointment.client.tsx
+@@ -12,6 +12,13 @@ import { toIsoFromLocalInput } from '@/lib/format';
+ import { readForm } from '@/lib/form';
+ import { fetchDoctorOptions, fetchPatientOptions } from '@/lib/option-fetchers';
+ 
++function localDateTimeInputMin(): string {
++  const date = new Date();
++  date.setMinutes(date.getMinutes() + 1, 0, 0);
++  const pad = (value: number) => String(value).padStart(2, '0');
++  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
++}
++
+ export function BookAppointmentButton() {
+   const router = useRouter();
+   const [open, setOpen] = useState(false);
+@@ -47,7 +54,7 @@ function BookingModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
+       <ErrorBanner message={error} />
+       {user.role === 'ADMIN' && <ComboboxField label="Patient" name="patientId" required placeholder="Search by name, email, phone or ID" fetchOptions={fetchPatientOptions} />}
+       <ComboboxField label="Doctor" name="doctorId" required placeholder="Search by name, specialty or email" fetchOptions={fetchDoctorOptions} />
+-      <Field label="Date and time" name="scheduledAt" type="datetime-local" required />
++      <Field label="Date and time" name="scheduledAt" type="datetime-local" min={localDateTimeInputMin()} required />
+       <TextArea label="Reason for visit" name="reason" />
+       <ModalActions onCancel={onClose} submitLabel="Book appointment" busy={busy} />
+     </Modal>
+diff --git a/apps/api/src/medical-records/dto/create-medical-record.dto.ts b/apps/api/src/medical-records/dto/create-medical-record.dto.ts
+index 1e731d4..e62c729 100644
+--- a/apps/api/src/medical-records/dto/create-medical-record.dto.ts
++++ b/apps/api/src/medical-records/dto/create-medical-record.dto.ts
+@@ -9,6 +9,6 @@ export class CreateMedicalRecordDto {
+   @IsOptional() @IsUUID() visitId?: string;
+   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(180) diagnosis: string;
+   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(MAX_TEXT_LENGTH) notes: string;
+-  @IsOptional() @Trimmed() @IsString() @MaxLength(MAX_TEXT_LENGTH) allergies?: string | null;
+-  @IsOptional() @Trimmed() @IsString() @MaxLength(MAX_TEXT_LENGTH) treatmentPlan?: string | null;
++  @IsOptional() @Trimmed() @IsString() @IsNotEmpty() @MaxLength(MAX_TEXT_LENGTH) allergies?: string | null;
++  @IsOptional() @Trimmed() @IsString() @IsNotEmpty() @MaxLength(MAX_TEXT_LENGTH) treatmentPlan?: string | null;
+ }
+diff --git a/apps/api/src/patients/dto/create-patient.dto.ts b/apps/api/src/patients/dto/create-patient.dto.ts
+index 0fba01d..331c7fc 100644
+--- a/apps/api/src/patients/dto/create-patient.dto.ts
++++ b/apps/api/src/patients/dto/create-patient.dto.ts
+@@ -1,17 +1,17 @@
+-import { IsEnum, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
++import { IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+ import { Gender } from '../../common/enums/gender.enum';
+ import { NormalizedEmail } from '../../common/validators/normalized-email.decorator';
+ import { Trimmed } from '../../common/validators/trimmed.decorator';
+-
+-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
++import { IsValidDateOnly } from '../../common/validators/date.decorators';
++import { IsPhoneLike } from '../../common/validators/phone.decorator';
+ 
+ export class CreatePatientDto {
+   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) firstName: string;
+   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) lastName: string;
+   @IsOptional() @NormalizedEmail() email?: string | null;
+-  @Trimmed() @IsString() @IsNotEmpty() @MaxLength(30) phone: string;
++  @IsPhoneLike() phone: string;
+   @IsOptional() @Trimmed() @IsString() @MaxLength(100) middleName?: string | null;
+-  @IsOptional() @Matches(ISO_DATE_PATTERN, { message: 'dateOfBirth must be a YYYY-MM-DD date' }) dateOfBirth?: string | null;
++  @IsOptional() @IsValidDateOnly({ notInFuture: true }) dateOfBirth?: string | null;
+   @IsEnum(Gender) gender: Gender;
+   @IsOptional() @Trimmed() @IsString() @MaxLength(500) address?: string | null;
+   @IsOptional() @Trimmed() @IsString() @MaxLength(150) nextOfKinName?: string | null;
+diff --git a/apps/api/src/prescriptions/dto/create-prescription.dto.ts b/apps/api/src/prescriptions/dto/create-prescription.dto.ts
+index cc6f38e..41df022 100644
+--- a/apps/api/src/prescriptions/dto/create-prescription.dto.ts
++++ b/apps/api/src/prescriptions/dto/create-prescription.dto.ts
+@@ -8,7 +8,7 @@ export class CreatePrescriptionDto {
+   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) dosage: string;
+   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) frequency: string;
+   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) duration: string;
+-  @IsOptional() @Trimmed() @IsString() @MaxLength(2000) instructions?: string;
++  @IsOptional() @Trimmed() @IsString() @IsNotEmpty() @MaxLength(2000) instructions?: string;
+   @IsOptional() @IsUUID() drugId?: string;
+   @IsOptional() @IsInt() @Min(1) @Max(100000) quantityPrescribed?: number;
+ }
+diff --git a/apps/web/app/(dashboard)/patients/_components/patient-actions.client.tsx b/apps/web/app/(dashboard)/patients/_components/patient-actions.client.tsx
+index 926c3c9..1467d57 100644
+--- a/apps/web/app/(dashboard)/patients/_components/patient-actions.client.tsx
++++ b/apps/web/app/(dashboard)/patients/_components/patient-actions.client.tsx
+@@ -14,6 +14,10 @@ import { useRefreshAction } from '@/lib/use-action';
+ import { useProfileSave } from '@/lib/use-profile-save';
+ 
+ const OPTIONAL_FIELDS = ['email', 'dateOfBirth', 'address', 'middleName', 'nextOfKinName', 'nextOfKinPhone', 'nextOfKinRelationship'];
++const today = (() => {
++  const date = new Date();
++  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
++})();
+ 
+ export function AddPatientButton() {
+   const [open, setOpen] = useState(false);
+@@ -79,15 +83,15 @@ function PatientModal({ patient, onClose, onSaved }: { patient: Patient | null;
+     <Modal title={patient ? 'Edit patient' : 'Add patient'} eyebrow={patient ? 'UPDATE' : 'NEW RECORD'} onClose={close} onSubmit={submit}>
+       <ErrorBanner message={error} />
+       <div className="field-row">
+-        <Field label="First name" name="firstName" required defaultValue={patient?.firstName} />
+-        <Field label="Last name" name="lastName" required defaultValue={patient?.lastName} />
++        <Field label="First name" name="firstName" required minLength={1} maxLength={100} defaultValue={patient?.firstName} />
++        <Field label="Last name" name="lastName" required minLength={1} maxLength={100} defaultValue={patient?.lastName} />
+       </div>
+-      <Field label="Email address (optional)" name="email" type="email" defaultValue={patient?.email} />
+-      <Field label="Phone number" name="phone" required defaultValue={patient?.phone} />
++      <Field label="Email address (optional)" name="email" type="email" maxLength={180} defaultValue={patient?.email} />
++      <Field label="Phone number" name="phone" type="tel" required maxLength={30} pattern="\+?[0-9][0-9\s().-]*[0-9]" defaultValue={patient?.phone} />
+       <Field label="Middle name (optional)" name="middleName" defaultValue={patient?.middleName} />
+       <div className="field-row">
+         <Select label="Gender" name="gender" placeholder="Select gender" required defaultValue={patient?.gender} options={GENDERS.map((g) => ({ value: g, label: g }))} />
+-        <Field label="Date of birth" name="dateOfBirth" type="date" defaultValue={patient?.dateOfBirth} />
++        <Field label="Date of birth" name="dateOfBirth" type="date" max={today} defaultValue={patient?.dateOfBirth} />
+       </div>
+       <TextArea label="Address" name="address" rows={2} defaultValue={patient?.address} />
+       <div className="field-row"><Field label="Next of kin" name="nextOfKinName" defaultValue={patient?.nextOfKinName} /><Field label="Next of kin phone" name="nextOfKinPhone" defaultValue={patient?.nextOfKinPhone} /></div>

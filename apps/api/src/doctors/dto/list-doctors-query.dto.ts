@@ -6,7 +6,7 @@ export class ListDoctorsQueryDto extends PaginationQueryDto {
   @IsOptional() @IsString() @MaxLength(100) q?: string;
 
   @IsOptional()
-  @Transform(({ value }) => value === true || value === 'true')
+  @Transform(({ value }) => value === true || value === 'true' ? true : value === false || value === 'false' ? false : value)
   @IsBoolean()
   includeInactive?: boolean;
 }

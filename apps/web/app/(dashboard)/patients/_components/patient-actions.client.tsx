@@ -14,6 +14,10 @@ import { useRefreshAction } from '@/lib/use-action';
 import { useProfileSave } from '@/lib/use-profile-save';
 
 const OPTIONAL_FIELDS = ['email', 'dateOfBirth', 'address', 'middleName', 'nextOfKinName', 'nextOfKinPhone', 'nextOfKinRelationship'];
+const today = (() => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+})();
 
 export function AddPatientButton() {
   const [open, setOpen] = useState(false);
@@ -79,15 +83,15 @@ function PatientModal({ patient, onClose, onSaved }: { patient: Patient | null; 
     <Modal title={patient ? 'Edit patient' : 'Add patient'} eyebrow={patient ? 'UPDATE' : 'NEW RECORD'} onClose={close} onSubmit={submit}>
       <ErrorBanner message={error} />
       <div className="field-row">
-        <Field label="First name" name="firstName" required defaultValue={patient?.firstName} />
-        <Field label="Last name" name="lastName" required defaultValue={patient?.lastName} />
+        <Field label="First name" name="firstName" required minLength={1} maxLength={100} defaultValue={patient?.firstName} />
+        <Field label="Last name" name="lastName" required minLength={1} maxLength={100} defaultValue={patient?.lastName} />
       </div>
-      <Field label="Email address (optional)" name="email" type="email" defaultValue={patient?.email} />
-      <Field label="Phone number" name="phone" required defaultValue={patient?.phone} />
+      <Field label="Email address (optional)" name="email" type="email" maxLength={180} defaultValue={patient?.email} />
+      <Field label="Phone number" name="phone" type="tel" required maxLength={30} pattern="\+?[0-9][0-9\s().-]*[0-9]" defaultValue={patient?.phone} />
       <Field label="Middle name (optional)" name="middleName" defaultValue={patient?.middleName} />
       <div className="field-row">
         <Select label="Gender" name="gender" placeholder="Select gender" required defaultValue={patient?.gender} options={GENDERS.map((g) => ({ value: g, label: g }))} />
-        <Field label="Date of birth" name="dateOfBirth" type="date" defaultValue={patient?.dateOfBirth} />
+        <Field label="Date of birth" name="dateOfBirth" type="date" max={today} defaultValue={patient?.dateOfBirth} />
       </div>
       <TextArea label="Address" name="address" rows={2} defaultValue={patient?.address} />
       <div className="field-row"><Field label="Next of kin" name="nextOfKinName" defaultValue={patient?.nextOfKinName} /><Field label="Next of kin phone" name="nextOfKinPhone" defaultValue={patient?.nextOfKinPhone} /></div>

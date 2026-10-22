@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { ProfileType } from '../common/enums/profile-type.enum';
 import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
 import { DoctorsService } from '../doctors/doctors.service';
@@ -14,7 +14,7 @@ const ACCOUNT_NAME_MAX_LENGTH = 100;
 interface ProfileIdentity {
   firstName: string;
   lastName: string;
-  email: string;
+  email: string | null;
   userId: string | null;
 }
 
@@ -29,8 +29,9 @@ export class ProfileAccountService {
   ) {}
 
   async createLogin(dto: CreateProfileAccountDto, actor: AuthenticatedUser): Promise<UserResponse> {
-    const profile = await this.findProfile(dto);
+    const profile = await this.findProfile(dto, actor);
     if (profile.userId) throw new ConflictException('This profile already has a login');
+    if (!profile.email) throw new BadRequestException('Add an email address to this profile before creating a login');
     const account = await this.users.create(
       { email: profile.email, name: this.accountName(profile), role: ROLE_FOR_PROFILE[dto.profileType] },
       actor,
@@ -39,8 +40,8 @@ export class ProfileAccountService {
     return account;
   }
 
-  private findProfile(dto: CreateProfileAccountDto): Promise<ProfileIdentity> {
-    return dto.profileType === ProfileType.PATIENT ? this.patients.findOrFail(dto.profileId) : this.doctors.findOrFail(dto.profileId);
+  private findProfile(dto: CreateProfileAccountDto, actor: AuthenticatedUser): Promise<ProfileIdentity> {
+    return dto.profileType === ProfileType.PATIENT ? this.patients.findOrFail(dto.profileId, actor) : this.doctors.findOrFail(dto.profileId, actor);
   }
 
   private accountName(profile: ProfileIdentity): string {

@@ -14,8 +14,11 @@ import {
 
 const MIN_SECRET_LENGTH = 22;
 const PLACEHOLDER_PREFIX = "replace_with";
-const toBoolean = ({ value }: { value: unknown }) =>
-  value === true || value === "true";
+const toBoolean = ({ value }: { value: unknown }) => {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  return value;
+};
 
 export class EnvironmentVariables {
   @IsIn(["development", "production", "test"])

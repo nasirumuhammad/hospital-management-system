@@ -8,7 +8,7 @@ export class CreatePrescriptionDto {
   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) dosage: string;
   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) frequency: string;
   @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) duration: string;
-  @IsOptional() @Trimmed() @IsString() @MaxLength(2000) instructions?: string;
+  @IsOptional() @Trimmed() @IsString() @IsNotEmpty() @MaxLength(2000) instructions?: string;
   @IsOptional() @IsUUID() drugId?: string;
   @IsOptional() @IsInt() @Min(1) @Max(100000) quantityPrescribed?: number;
 }
