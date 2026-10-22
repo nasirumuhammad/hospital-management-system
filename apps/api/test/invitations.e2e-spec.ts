@@ -14,7 +14,7 @@ describe('Account invitations and one-step logins (e2e)', () => {
   });
 
   async function createPatient(email: string): Promise<string> {
-    const response = await admin.post('/api/patients').send({ firstName: 'Ada', lastName: 'Okafor', email }).expect(201);
+    const response = await admin.post('/api/patients').send({ firstName: 'Ada', lastName: 'Okafor', email, phone: '08031234567', gender: 'FEMALE' }).expect(201);
     return response.body.id;
   }
 

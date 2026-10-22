@@ -12,7 +12,7 @@ const ALL: UserRole[] = ['ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST', 'CASHIER', 
 export const NAV_ENTRIES: NavEntry[] = [
   { href: '/', label: 'Overview', icon: 'overview', roles: ALL },
   { href: '/platform/hospitals', label: 'Platform hospitals', icon: 'platform', roles: ['SUPER_ADMIN'] },
-  { href: '/appointments', label: 'Appointments', icon: 'appointments', roles: ['ADMIN', 'DOCTOR', 'PATIENT', 'RECEPTIONIST'] },
+  { href: '/appointments', label: 'Appointments', icon: 'appointments', roles: ['ADMIN', 'DOCTOR', 'NURSE', 'PATIENT', 'RECEPTIONIST'] },
   { href: '/visits', label: 'Visits & queue', icon: 'visits', roles: ['ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'] },
   { href: '/patients', label: 'Patients', icon: 'patients', roles: ['ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'] },
   { href: '/doctors', label: 'Doctors', icon: 'doctors', roles: ALL },

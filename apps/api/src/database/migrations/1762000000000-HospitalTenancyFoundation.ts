@@ -82,7 +82,7 @@ export class HospitalTenancyFoundation1762000000000 implements MigrationInterfac
     // Number new patients atomically in the database. The hospital row lock
     // serializes concurrent registrations and the counter rolls over by Nigeria year.
     await q.query(`
-      CREATE FUNCTION assign_hospital_patient_number() RETURNS trigger AS $$
+      CREATE OR REPLACE FUNCTION assign_hospital_patient_number() RETURNS trigger AS $$
       DECLARE
         current_year smallint := EXTRACT(YEAR FROM (now() AT TIME ZONE 'Africa/Lagos'))::smallint;
         current_prefix varchar(10);

@@ -20,3 +20,22 @@ export function ReceiveBatchForm({ drugId }: { drugId: string }) {
     <input required aria-label="Batch number" value={batchNumber} onChange={(e)=>setBatchNumber(e.target.value)} placeholder="Batch number"/><input required aria-label="Expiry date" type="date" value={expiryDate} onChange={(e)=>setExpiryDate(e.target.value)}/><input required aria-label="Quantity received" type="number" min="1" value={quantityReceived} onChange={(e)=>setQuantityReceived(e.target.value)} placeholder="Quantity"/><input aria-label="Supplier" value={supplier} onChange={(e)=>setSupplier(e.target.value)} placeholder="Supplier"/><button className="btn secondary small" type="submit">Receive stock</button>{error&&<small role="alert">{error}</small>}
   </form>;
 }
+
+/** Pharmacy step 1: raise the invoice the patient takes to the cashier. */
+export function GenerateInvoiceButton({ prescriptionId }: { prescriptionId: string }) {
+  const { run, error } = useRefreshAction();
+  return <div><button className="btn primary small" onClick={() => void run(() => api(`/pharmacy/prescriptions/${prescriptionId}/invoice`, { method: 'POST' }))}>Generate invoice</button>{error && <small role="alert">{error}</small>}</div>;
+}
+
+/** Pharmacy step 2: hand over the medicine once the cashier has been paid. */
+export function DispenseForm({ prescriptionId, remaining }: { prescriptionId: string; remaining: number }) {
+  const { run, error } = useRefreshAction();
+  const [quantity, setQuantity] = useState(String(remaining));
+  return (
+    <form className="inline-operation-form" onSubmit={(event) => { event.preventDefault(); void run(() => api(`/pharmacy/prescriptions/${prescriptionId}/dispense`, { method: 'POST', body: { quantity: Number(quantity) } })); }}>
+      <input required aria-label="Quantity to dispense" type="number" min="1" max={remaining} value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+      <button className="btn primary small" type="submit">Dispense</button>
+      {error && <small role="alert">{error}</small>}
+    </form>
+  );
+}

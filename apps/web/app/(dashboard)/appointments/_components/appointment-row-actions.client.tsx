@@ -63,7 +63,7 @@ export function AppointmentRowActions({ appointment, role }: { appointment: RowA
             {nextStatuses.map((next) => <option key={next} value={next}>{titleCase(next)}</option>)}
           </select>
         )}
-        {role === 'ADMIN' && open && <button className="btn secondary small" onClick={() => setRescheduling(true)}>Reschedule</button>}
+        {['ADMIN', 'NURSE', 'RECEPTIONIST'].includes(role) && open && <button className="btn secondary small" onClick={() => setRescheduling(true)}>Reschedule</button>}
         {role === 'PATIENT' && open && (
           <button className="btn danger small" onClick={() => void cancelAppointment()}>Cancel</button>
         )}

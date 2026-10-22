@@ -3,7 +3,9 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
+import { BilledOrdersService } from './billed-orders.service';
 import { OperationsService } from './operations.service';
+import { SetPriceDto } from './dto/set-price.dto';
 import { CreateVisitDto } from './dto/create-visit.dto';
 import { UpdateVisitStatusDto } from './dto/update-visit-status.dto';
 import { CreateTriageDto } from './dto/create-triage.dto';
@@ -18,7 +20,7 @@ const CLINICAL_ROLES = [UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRol
 
 @Controller()
 export class OperationsController {
-  constructor(private readonly operations: OperationsService) {}
+  constructor(private readonly operations: OperationsService, private readonly billedOrders: BilledOrdersService) {}
 
   @Get('visits')
   @Roles(...CLINICAL_ROLES)
@@ -105,6 +107,26 @@ export class OperationsController {
   @Post('pharmacy/drugs/:id/batches')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
   receiveBatch(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReceiveDrugBatchDto, @CurrentUser() actor: AuthenticatedUser) { return this.operations.receiveBatch(id, dto, actor); }
+
+  @Get('pharmacy/queue')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  pharmacyQueue(@CurrentUser() actor: AuthenticatedUser, @Query('status') status?: string) { return this.billedOrders.listPharmacyQueue(actor, status); }
+
+  @Post('pharmacy/prescriptions/:id/invoice')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  invoicePrescription(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthenticatedUser) { return this.billedOrders.invoicePrescription(id, actor); }
+
+  @Patch('pharmacy/drugs/:id/price')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  setDrugPrice(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetPriceDto, @CurrentUser() actor: AuthenticatedUser) { return this.billedOrders.setDrugPrice(id, dto.price, actor); }
+
+  @Post('lab/orders/:id/invoice')
+  @Roles(UserRole.ADMIN, UserRole.LAB)
+  invoiceLabOrder(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthenticatedUser) { return this.billedOrders.invoiceLabOrder(id, actor); }
+
+  @Patch('lab/tests/:id/price')
+  @Roles(UserRole.ADMIN, UserRole.LAB)
+  setLabTestPrice(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetPriceDto, @CurrentUser() actor: AuthenticatedUser) { return this.billedOrders.setLabTestPrice(id, dto.price, actor); }
 
   @Post('pharmacy/prescriptions/:id/dispense')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST)

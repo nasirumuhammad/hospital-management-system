@@ -3,6 +3,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import type { Paginated, Prescription } from '@healthcare/types';
 import { DataTable } from '@/components/ui/DataTable';
 import { PersonCell } from '@/components/ui/Page';
+import { StatusBadge } from '@/components/ui/StatusBadge';
 import { formatDate, fullName } from '@/lib/format';
 import type { SortSpec } from '@/lib/search-params';
 import { PRESCRIPTION_SORTABLE, PRESCRIPTION_DEFAULT_SORT } from './prescriptions-table.config';
@@ -19,6 +20,7 @@ export function PrescriptionsTable({ data, sort }: { data: Paginated<Prescriptio
     { id: 'frequency', header: 'Frequency', enableSorting: true, cell: ({ row }) => row.original.frequency },
     { id: 'duration', header: 'Duration', enableSorting: true, cell: ({ row }) => row.original.duration },
     { id: 'doctor', header: 'Prescribed by', enableSorting: true, cell: ({ row }) => <>Dr. {fullName(row.original.doctor)}</> },
+    { id: 'status', header: 'Status', enableSorting: false, cell: ({ row }) => <StatusBadge value={row.original.status ?? 'PENDING'} /> },
     { id: 'createdAt', header: 'Date', enableSorting: true, cell: ({ row }) => formatDate(row.original.createdAt) },
   ];
   return (

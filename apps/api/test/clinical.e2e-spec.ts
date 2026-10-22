@@ -20,7 +20,8 @@ describe('Authorization, clinical and billing flows (e2e)', () => {
   let unlinkedDoctor: Agent;
 
   async function createPerson(kind: 'patients' | 'doctors', email: string, extra: Record<string, unknown>): Promise<Person> {
-    const profile = await admin.post(`/api/${kind}`).send({ firstName: 'First', lastName: email.split('@')[0], email, ...extra }).expect(201);
+    const required = kind === 'patients' ? { phone: '08031234567', gender: 'MALE' } : {};
+    const profile = await admin.post(`/api/${kind}`).send({ firstName: 'First', lastName: email.split('@')[0], email, ...required, ...extra }).expect(201);
     const role = kind === 'patients' ? 'PATIENT' : 'DOCTOR';
     const account = await admin.post('/api/users').send({ email, name: email, password: STRONG_PASSWORD, role }).expect(201);
     await admin.post('/api/users/link-profile').send({ userId: account.body.id, profileType: role, profileId: profile.body.id }).expect(200);
@@ -59,7 +60,7 @@ describe('Authorization, clinical and billing flows (e2e)', () => {
     });
 
     it('returns 409 for duplicate emails instead of a server error', async () => {
-      await admin.post('/api/patients').send({ firstName: 'Dup', lastName: 'Licate', email: 'patient.one@example.com' }).expect(409);
+      await admin.post('/api/patients').send({ firstName: 'Dup', lastName: 'Licate', email: 'patient.one@example.com', phone: '08031234567', gender: 'MALE' }).expect(409);
     });
 
     it('returns paginated envelopes', async () => {
@@ -202,10 +203,10 @@ describe('Authorization, clinical and billing flows (e2e)', () => {
 
   describe('soft deletion and reporting', () => {
     it('soft-deletes a patient, hides them, keeps history readable, and frees the email', async () => {
-      const temp = await admin.post('/api/patients').send({ firstName: 'Temp', lastName: 'Patient', email: 'temp.patient@example.com' }).expect(201);
+      const temp = await admin.post('/api/patients').send({ firstName: 'Temp', lastName: 'Patient', email: 'temp.patient@example.com', phone: '08031234567', gender: 'MALE' }).expect(201);
       await admin.delete(`/api/patients/${temp.body.id}`).expect(204);
       await admin.get(`/api/patients/${temp.body.id}`).expect(404);
-      await admin.post('/api/patients').send({ firstName: 'Temp', lastName: 'Again', email: 'temp.patient@example.com' }).expect(201);
+      await admin.post('/api/patients').send({ firstName: 'Temp', lastName: 'Again', email: 'temp.patient@example.com', phone: '08031234567', gender: 'MALE' }).expect(201);
     });
 
     it('keeps appointments readable after their doctor is deactivated', async () => {

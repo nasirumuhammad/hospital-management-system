@@ -55,8 +55,11 @@ export class Prescription {
   @Column({ type: 'integer', nullable: true })
   quantityPrescribed: number | null;
 
+  @Column({ type: 'uuid', nullable: true })
+  invoiceId: string | null;
+
   @Column({ type: 'varchar', length: 20, default: 'PENDING' })
-  status: 'PENDING' | 'PARTIAL' | 'DISPENSED' | 'CANCELLED';
+  status: 'PENDING' | 'AWAITING_PAYMENT' | 'PAID' | 'PARTIAL' | 'DISPENSED' | 'CANCELLED';
 
   @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;

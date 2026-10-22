@@ -71,8 +71,14 @@ export class InvoicesService {
   async recordPayment(id: string, dto: RecordPaymentDto, actor: AuthenticatedUser): Promise<Invoice> {
     const amount = dto.amount.toFixed(CURRENCY_DECIMALS);
     const payment = await this.repository.withLockedInvoice(id, this.requireHospital(actor), async (invoice, manager) => {
-      await manager.update(Invoice, id, applyPayment(invoice, amount));
-      return manager.save(manager.create(Payment, { hospitalId: this.requireHospital(actor), invoiceId: id, amount, method: dto.method, reference: dto.reference ?? null, receivedById: actor.id }));
+      const update = applyPayment(invoice, amount);
+      await manager.update(Invoice, id, update);
+      const saved = await manager.save(manager.create(Payment, { hospitalId: this.requireHospital(actor), invoiceId: id, amount, method: dto.method, reference: dto.reference ?? null, receivedById: actor.id }));
+      // Once the cashier has taken full payment, a pharmacy prescription billed on this invoice becomes dispensable.
+      if (update.status === InvoiceStatus.PAID) {
+        await manager.query(`UPDATE "prescriptions" SET "status"='PAID' WHERE "invoiceId"=$1 AND "hospitalId"=$2 AND "status"='AWAITING_PAYMENT'`, [id, this.requireHospital(actor)]);
+      }
+      return saved;
     });
     await this.record(AuditAction.PAYMENT_RECORDED, AuditTarget.PAYMENT, actor, payment.id, { invoiceId: id });
     return this.findOne(id, actor);
@@ -82,6 +88,10 @@ export class InvoicesService {
     await this.repository.withLockedInvoice(id, this.requireHospital(actor), async (invoice, manager) => {
       assertCanVoid(invoice);
       await manager.update(Invoice, id, { status: InvoiceStatus.VOID });
+      // An unpaid order goes back to its department so a corrected invoice can be generated.
+      const hospitalId = this.requireHospital(actor);
+      await manager.query(`UPDATE "prescriptions" SET "status"='PENDING', "invoiceId"=NULL WHERE "invoiceId"=$1 AND "hospitalId"=$2 AND "status"='AWAITING_PAYMENT'`, [id, hospitalId]);
+      await manager.query(`UPDATE "lab_orders" SET "invoiceId"=NULL WHERE "invoiceId"=$1 AND "hospitalId"=$2`, [id, hospitalId]);
     });
     await this.record(AuditAction.INVOICE_VOIDED, AuditTarget.INVOICE, actor, id);
     return this.findOne(id, actor);

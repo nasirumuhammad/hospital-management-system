@@ -52,7 +52,7 @@ function BookingModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =
   return (
     <Modal title="Book appointment" eyebrow="NEW RECORD" onClose={onClose} onSubmit={submit}>
       <ErrorBanner message={error} />
-      {user.role === 'ADMIN' && <ComboboxField label="Patient" name="patientId" required placeholder="Search by name, email, phone or ID" fetchOptions={fetchPatientOptions} />}
+      {user.role !== 'PATIENT' && <ComboboxField label="Patient" name="patientId" required placeholder="Search by name, email, phone or ID" fetchOptions={fetchPatientOptions} />}
       <ComboboxField label="Doctor" name="doctorId" required placeholder="Search by name, specialty or email" fetchOptions={fetchDoctorOptions} />
       <Field label="Date and time" name="scheduledAt" type="datetime-local" min={localDateTimeInputMin()} required />
       <TextArea label="Reason for visit" name="reason" />

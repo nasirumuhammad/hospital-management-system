@@ -120,7 +120,7 @@ export class OperationsService {
     const params: unknown[] = [hospitalId];
     let filter = 'o."hospitalId"=$1';
     if (status) { params.push(status); filter += ` AND i."status"=$${params.length}`; }
-    return this.dataSource.query(`SELECT o.*, p."hospitalNumber", p."firstName", p."lastName", json_agg(json_build_object('id',i."id",'testName',i."testName",'status',i."status")) AS items FROM "lab_orders" o JOIN "patients" p ON p."id"=o."patientId" AND p."hospitalId"=o."hospitalId" JOIN "lab_order_items" i ON i."labOrderId"=o."id" AND i."hospitalId"=o."hospitalId" WHERE ${filter} GROUP BY o."id",p."hospitalNumber",p."firstName",p."lastName" ORDER BY o."orderedAt" DESC`, params);
+    return this.dataSource.query(`SELECT o.*, p."hospitalNumber", p."firstName", p."lastName", inv."status" AS "invoiceStatus", inv."amount" AS "invoiceAmount", json_agg(json_build_object('id',i."id",'testName',i."testName",'status',i."status")) AS items FROM "lab_orders" o JOIN "patients" p ON p."id"=o."patientId" AND p."hospitalId"=o."hospitalId" LEFT JOIN "invoices" inv ON inv."id"=o."invoiceId" AND inv."hospitalId"=o."hospitalId" JOIN "lab_order_items" i ON i."labOrderId"=o."id" AND i."hospitalId"=o."hospitalId" WHERE ${filter} GROUP BY o."id",p."hospitalNumber",p."firstName",p."lastName",inv."status",inv."amount" ORDER BY o."orderedAt" DESC`, params);
   }
 
   async recordLabResults(itemId: string, dto: RecordLabResultsDto, actor: AuthenticatedUser) {
@@ -157,7 +157,7 @@ export class OperationsService {
   async createDrug(dto: CreateDrugDto, actor: AuthenticatedUser) {
     const hospitalId = this.hospital(actor);
     return this.dataSource.transaction(async (manager) => {
-      const [drug] = await manager.query(`INSERT INTO "drugs" ("hospitalId","genericName","brandName","form","strength","dispensingUnit","reorderLevel") VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`, [hospitalId, dto.genericName.trim(), dto.brandName?.trim() || null, dto.form, dto.strength?.trim() || null, dto.dispensingUnit.trim(), dto.reorderLevel ?? 0]);
+      const [drug] = await manager.query(`INSERT INTO "drugs" ("hospitalId","genericName","brandName","form","strength","dispensingUnit","reorderLevel","unitPrice") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`, [hospitalId, dto.genericName.trim(), dto.brandName?.trim() || null, dto.form, dto.strength?.trim() || null, dto.dispensingUnit.trim(), dto.reorderLevel ?? 0, dto.unitPrice === undefined ? null : dto.unitPrice.toFixed(2)]);
       await this.writeAudit(manager, hospitalId, actor.id, 'DRUG_CREATED', 'drug', drug.id, { genericName: drug.genericName });
       return drug;
     });
@@ -185,6 +185,12 @@ export class OperationsService {
       if (!prescription) throw new NotFoundException('Prescription not found');
       if (!prescription.drugId || !prescription.quantityPrescribed) throw new BadRequestException('Prescription needs a catalog drug and prescribed quantity before dispensing');
       if (prescription.status === 'CANCELLED' || prescription.status === 'DISPENSED') throw new ConflictException('Prescription is not dispensable');
+      if (prescription.status === 'PENDING') throw new ConflictException('Generate the invoice for this prescription first, then have the patient pay at the cashier');
+      if (prescription.status === 'AWAITING_PAYMENT') throw new ConflictException('Payment has not been received. Send the patient to the cashier to pay the invoice');
+      if (prescription.invoiceId) {
+        const [invoice] = await manager.query(`SELECT "status" FROM "invoices" WHERE "id"=$1 AND "hospitalId"=$2`, [prescription.invoiceId, hospitalId]);
+        if (invoice?.status !== 'PAID') throw new ConflictException('The invoice for this prescription is not fully paid');
+      }
       const already = await manager.query(`SELECT COALESCE(SUM("quantity"),0)::int AS total FROM "dispensings" WHERE "prescriptionId"=$1 AND "hospitalId"=$2`, [prescriptionId, hospitalId]);
       const remaining = Number(prescription.quantityPrescribed) - Number(already[0].total);
       if (dto.quantity > remaining) throw new BadRequestException(`Only ${remaining} units remain to be dispensed`);
@@ -267,7 +273,7 @@ export class OperationsService {
   async createLabTest(dto: CreateLabTestDto, actor: AuthenticatedUser) {
     const hospitalId=this.hospital(actor);
     return this.dataSource.transaction(async(manager)=>{
-      const [test]=await manager.query(`INSERT INTO "lab_tests" ("hospitalId","code","name","category","specimen") VALUES ($1,$2,$3,$4,$5) RETURNING *`,[hospitalId,dto.code.trim().toUpperCase(),dto.name.trim(),dto.category.trim(),dto.specimen??null]);
+      const [test]=await manager.query(`INSERT INTO "lab_tests" ("hospitalId","code","name","category","specimen","price") VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,[hospitalId,dto.code.trim().toUpperCase(),dto.name.trim(),dto.category.trim(),dto.specimen??null,dto.price===undefined?null:dto.price.toFixed(2)]);
       await this.writeAudit(manager,hospitalId,actor.id,'LAB_TEST_CREATED','lab_test',test.id);
       return test;
     });
@@ -301,6 +307,9 @@ export class OperationsService {
       const [item]=await manager.query(`SELECT * FROM "lab_order_items" WHERE "id"=$1 AND "hospitalId"=$2 FOR UPDATE`,[itemId,hospitalId]);
       if(!item)throw new NotFoundException('Lab order item not found');
       if(item.status!=='ORDERED')throw new ConflictException('Only ordered tests can be marked collected');
+      const [billing]=await manager.query(`SELECT o."invoiceId", inv."status" AS "invoiceStatus" FROM "lab_orders" o LEFT JOIN "invoices" inv ON inv."id"=o."invoiceId" AND inv."hospitalId"=o."hospitalId" WHERE o."id"=$1 AND o."hospitalId"=$2`,[item.labOrderId,hospitalId]);
+      if(!billing?.invoiceId)throw new ConflictException('Generate the invoice for this lab order first, then have the patient pay at the cashier');
+      if(billing.invoiceStatus!=='PAID')throw new ConflictException('Payment has not been received. Send the patient to the cashier to pay the invoice');
       const [updated]=await manager.query(`UPDATE "lab_order_items" SET "status"='COLLECTED',"collectedAt"=now(),"collectedById"=$3,"updatedAt"=now() WHERE "id"=$1 AND "hospitalId"=$2 RETURNING *`,[itemId,hospitalId,actor.id]);
       await this.writeAudit(manager,hospitalId,actor.id,'LAB_SPECIMEN_COLLECTED','lab_order_item',itemId);
       return updated;

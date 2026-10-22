@@ -115,7 +115,8 @@ export interface Prescription {
   instructions: string | null;
   drugId?: string | null;
   quantityPrescribed?: number | null;
-  status?: 'PENDING' | 'PARTIAL' | 'DISPENSED' | 'CANCELLED';
+  invoiceId?: string | null;
+  status?: 'PENDING' | 'AWAITING_PAYMENT' | 'PAID' | 'PARTIAL' | 'DISPENSED' | 'CANCELLED';
   createdAt: string;
   patient: PatientSummary;
   doctor: DoctorSummary;
@@ -169,5 +170,6 @@ export interface Visit {
   doctorFirstName?: string | null; doctorLastName?: string | null;
 }
 export interface LabOrderItemSummary { id: string; testName: string; status: string; }
-export interface LabOrder { id: string; patientId: string; orderedAt: string; clinicalNote: string | null; hospitalNumber: string; firstName: string; lastName: string; items: LabOrderItemSummary[]; }
-export interface Drug { id: string; genericName: string; brandName: string | null; form: string; strength: string | null; dispensingUnit: string; reorderLevel: number; availableStock: number; }
+export interface LabOrder { id: string; patientId: string; orderedAt: string; clinicalNote: string | null; hospitalNumber: string; firstName: string; lastName: string; invoiceId: string | null; invoiceStatus: string | null; invoiceAmount: string | null; items: LabOrderItemSummary[]; }
+export interface Drug { id: string; genericName: string; brandName: string | null; form: string; strength: string | null; dispensingUnit: string; reorderLevel: number; availableStock: number; unitPrice: string | null; }
+export interface PharmacyQueueItem { id: string; medication: string; dosage: string; frequency: string; duration: string; quantityPrescribed: number | null; quantityDispensed: number; status: string; invoiceId: string | null; invoiceStatus: string | null; invoiceAmount: string | null; createdAt: string; firstName: string; lastName: string; hospitalNumber: string; drugId: string | null; genericName: string | null; unitPrice: string | null; dispensingUnit: string | null; }
