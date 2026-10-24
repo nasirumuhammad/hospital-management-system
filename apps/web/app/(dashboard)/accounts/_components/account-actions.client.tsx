@@ -2,6 +2,7 @@
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { USER_ROLES, type SessionUser } from '@healthcare/types';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ErrorBanner } from '@/components/ui/Feedback';
 import { ComboboxField } from '@/components/ui/ComboboxField';
 import { Field, Select } from '@/components/ui/Fields';
@@ -9,7 +10,7 @@ import { Modal, ModalActions } from '@/components/ui/Modal';
 import { api, errorMessage } from '@/lib/api-client';
 import { titleCase } from '@/lib/format';
 import { readForm } from '@/lib/form';
-import { fetchDoctorOptions, fetchPatientOptions } from '@/lib/option-fetchers';
+import { fetchDoctorOptions, fetchPatientOptions, staffOptionsFetcher } from '@/lib/option-fetchers';
 import { useRefreshAction } from '@/lib/use-action';
 
 export function AddAccountButton() {
@@ -26,13 +27,26 @@ export function AddAccountButton() {
 export function AccountRowActions({ account, isSelf }: { account: SessionUser; isSelf: boolean }) {
   const [linking, setLinking] = useState(false);
   const { error, setError, run } = useRefreshAction();
+  const confirmAction = useConfirmDialog();
+
+  async function deleteAccount() {
+    const confirmed = await confirmAction({
+      title: 'Delete account',
+      message: `Delete the account for ${account.name}? They can no longer sign in. Their person record is kept and can be given a new login later, and the work they did stays attributed to them.`,
+      confirmLabel: 'Delete account',
+      tone: 'danger',
+    });
+    if (confirmed) await run(() => api(`/users/${account.id}`, { method: 'DELETE' }));
+  }
+
   return (
     <>
       <div className="row-actions">
-        {account.role !== 'ADMIN' && <button className="btn secondary small" onClick={() => setLinking(true)}>Link profile</button>}
+        <button className="btn secondary small" onClick={() => setLinking(true)}>Link profile</button>
         {!isSelf && (
           <button className="btn secondary small" onClick={() => void run(() => api(`/users/${account.id}/active`, { method: 'PATCH', body: { isActive: !account.isActive } }))}>{account.isActive ? 'Disable' : 'Enable'}</button>
         )}
+        {!isSelf && <button className="btn danger small" onClick={() => void deleteAccount()}>Delete</button>}
       </div>
       <ErrorBanner message={error} onDismiss={() => setError('')} />
       {linking && <LinkProfileModal account={account} onClose={() => setLinking(false)} />}
@@ -70,7 +84,7 @@ function CreateAccountModal({ onClose, onSaved }: { onClose: () => void; onSaved
 }
 
 function LinkProfileModal({ account, onClose }: { account: SessionUser; onClose: () => void }) {
-  const isPatient = account.role === 'PATIENT';
+  const kind = account.role === 'PATIENT' ? 'PATIENT' : account.role === 'DOCTOR' ? 'DOCTOR' : 'STAFF';
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -79,7 +93,7 @@ function LinkProfileModal({ account, onClose }: { account: SessionUser; onClose:
     event.preventDefault();
     setBusy(true);
     try {
-      await api('/users/link-profile', { method: 'POST', body: { userId: account.id, profileType: account.role, profileId: readForm(event.currentTarget).profileId } });
+      await api('/users/link-profile', { method: 'POST', body: { userId: account.id, profileType: kind, profileId: readForm(event.currentTarget).profileId } });
       setDone(true);
     } catch (failure) {
       setError(errorMessage(failure));
@@ -92,8 +106,8 @@ function LinkProfileModal({ account, onClose }: { account: SessionUser; onClose:
     <Modal title={`Link ${account.name}`} eyebrow="PROFILE" onClose={onClose} onSubmit={submit}>
       <ErrorBanner message={error} />
       {done && <p className="success-banner">Profile linked.</p>}
-      <ComboboxField label={isPatient ? 'Patient profile' : 'Doctor profile'} name="profileId" required placeholder="Search by name, email or ID"
-        fetchOptions={isPatient ? fetchPatientOptions : fetchDoctorOptions} />
+      <ComboboxField label={kind === 'PATIENT' ? 'Patient profile' : kind === 'DOCTOR' ? 'Doctor profile' : 'Staff profile'} name="profileId" required placeholder="Search by name, email or ID"
+        fetchOptions={kind === 'PATIENT' ? fetchPatientOptions : kind === 'DOCTOR' ? fetchDoctorOptions : staffOptionsFetcher(account.role)} />
       <ModalActions onCancel={onClose} submitLabel="Link profile" busy={busy || done} />
     </Modal>
   );

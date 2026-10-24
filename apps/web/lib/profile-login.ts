@@ -1,12 +1,12 @@
 import { api } from './api-client';
 import type { FormValues } from './form';
 
-export type LoginProfileType = 'PATIENT' | 'DOCTOR';
+export type LoginProfileType = 'PATIENT' | 'DOCTOR' | 'STAFF';
 
 const LOGIN_CHOICE_FIELD = 'createLogin';
 const CHECKED_VALUE = 'on';
 
-/** Creates the account for an existing patient/doctor record, e-mails an invitation and links it. */
+/** Creates the account for an existing patient, doctor or staff record, e-mails an invitation and links it. */
 export function createLoginFor(profileType: LoginProfileType, profileId: string): Promise<unknown> {
   return api('/users/from-profile', { method: 'POST', body: { profileType, profileId } });
 }

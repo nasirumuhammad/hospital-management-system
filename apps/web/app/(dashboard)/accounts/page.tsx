@@ -18,7 +18,7 @@ export default async function AccountsPage({ searchParams }: { searchParams: Pag
 
   return (
     <>
-      <PageHeader title="Accounts" description="Sign-in accounts for staff and patients." extra={<AddAccountButton />} />
+      <PageHeader title="Accounts" description="Sign-in accounts only. The people behind them are kept in Patients, Doctors and Staff, so deleting an account never deletes the person." extra={<AddAccountButton />} />
       <ListPanel title="User accounts" description={`${data.total.toLocaleString('en-US')} accounts`}>
         <AccountsTable data={data} sort={sort} selfId={me.id} />
       </ListPanel>

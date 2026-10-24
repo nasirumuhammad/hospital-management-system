@@ -1,4 +1,4 @@
-import type { Doctor, Drug, MedicalRecord, Paginated, Patient, Visit } from '@healthcare/types';
+import type { Doctor, Drug, StaffMember, MedicalRecord, Paginated, Patient, Visit } from '@healthcare/types';
 import type { ComboOption } from '@/components/ui/ComboboxField';
 import { api } from './api-client';
 import { formatDate, fullName } from './format';
@@ -23,6 +23,14 @@ export async function fetchDoctorOptions(term: string): Promise<ComboOption[]> {
     label: `Dr. ${fullName(doctor)}`,
     description: `${doctor.specialty} · ${doctor.email}`,
   }));
+}
+
+/** Staff records of one role (an account can only be linked to a staff record with the same role). */
+export function staffOptionsFetcher(role: string) {
+  return async (term: string): Promise<ComboOption[]> => {
+    const result = await api<Paginated<StaffMember>>('/staff', { query: { q: term || undefined, role, limit: OPTION_PAGE_SIZE } });
+    return result.items.map((member) => ({ value: member.id, label: fullName(member), description: [member.jobTitle, member.email].filter(Boolean).join(' · ') }));
+  };
 }
 
 export function recordOptionsFetcher(patientId: string) {

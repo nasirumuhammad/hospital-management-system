@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { DoctorsModule } from '../doctors/doctors.module';
 import { MailModule } from '../mail/mail.module';
 import { PatientsModule } from '../patients/patients.module';
+import { StaffModule } from '../staff/staff.module';
+import { AccountRemovalService } from './account-removal.service';
 import { AccountNotificationsService } from './account-notifications.service';
 import { AdminBootstrapService } from './admin-bootstrap.service';
 import { User } from './entities/user.entity';
@@ -17,7 +19,7 @@ import { UsersRepository } from './users.repository';
 import { UsersService } from './users.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, UserToken]), MailModule, PatientsModule, DoctorsModule],
+  imports: [TypeOrmModule.forFeature([User, UserToken]), MailModule, PatientsModule, DoctorsModule, StaffModule],
   controllers: [UsersController],
   providers: [
     UsersRepository,
@@ -28,6 +30,7 @@ import { UsersService } from './users.service';
     AccountNotificationsService,
     ProfileLinkService,
     ProfileAccountService,
+    AccountRemovalService,
     AdminBootstrapService,
   ],
   exports: [UsersService, PasswordService, UserTokensService, AccountNotificationsService],

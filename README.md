@@ -109,3 +109,17 @@ See `docs/TENANCY-ROLLOUT.md` for role and deployment limitations. Lab ranges an
 
 Read `docs/PRODUCTION-CHECKLIST.md` first. Essentials: serve web and API over HTTPS on the same registrable domain (cookies are `SameSite=Lax`, `Secure` in production), set `TRUST_PROXY`, real `JWT_SECRET`, `MAIL_TRANSPORT=resend` with `RESEND_API_KEY` and `MAIL_FROM`, run `migration:run:prod` before starting the new API version, and remove `ADMIN_*` after the first start.
 `docs/LEGACY-MIGRATION.md` describes importing data from the original PHP/MySQL system, which needs its database dump and has not been performed.
+
+## People vs. accounts
+
+A sign-in account (`staff_users`) is separate from the person it belongs to:
+
+| Person record | Table | Roles |
+| --- | --- | --- |
+| Patient | `patients` | PATIENT |
+| Doctor | `doctors` | DOCTOR |
+| Staff member | `staff_members` | ADMIN, NURSE, RECEPTIONIST, CASHIER, LAB, PHARMACIST, HMO_DESK, WARD_MANAGER |
+
+- A person record can exist with no login, and a login can be given later (**Create login** / **Link profile**).
+- **Deleting an account** (`DELETE /api/users/:id`, Accounts page) unlinks the person record and keeps it. The account row is soft-deleted, not erased, so triage, payments, dispensing and audit entries still say who did the work. The e-mail address is freed and the person can be given a new login.
+- Creating a staff-role account on the Accounts page also creates its staff record; the role on the account and the staff record must match.

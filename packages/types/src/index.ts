@@ -12,7 +12,7 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const GENDERS = ['MALE', 'FEMALE'] as const;
 
-export const AUDIT_TARGETS = ['user', 'patient', 'doctor', 'appointment', 'medical_record', 'prescription', 'invoice', 'payment'] as const;
+export const AUDIT_TARGETS = ['user', 'patient', 'doctor', 'staff', 'appointment', 'medical_record', 'prescription', 'invoice', 'payment'] as const;
 export type AuditTarget = (typeof AUDIT_TARGETS)[number];
 
 export interface Paginated<T> {
@@ -66,6 +66,22 @@ export interface Doctor {
   phone: string | null;
   specialty: string;
   qualification: string | null;
+  isActive: boolean;
+  userId: string | null;
+}
+
+/** Roles whose person record is a StaffMember (doctors and patients have their own record types). */
+export const STAFF_ROLES = ['ADMIN', 'NURSE', 'RECEPTIONIST', 'CASHIER', 'LAB', 'PHARMACIST', 'HMO_DESK', 'WARD_MANAGER'] as const;
+export type StaffRole = (typeof STAFF_ROLES)[number];
+
+export interface StaffMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string | null;
+  role: StaffRole;
+  jobTitle: string | null;
   isActive: boolean;
   userId: string | null;
 }

@@ -1,4 +1,4 @@
-import { Column, Entity, Unique } from 'typeorm';
+import { Column, DeleteDateColumn, Entity, Unique } from 'typeorm';
 import { AbstractEntity } from '../../common/entities/abstract.entity';
 import { UserRole } from '../../common/enums/user-role.enum';
 
@@ -28,4 +28,8 @@ export class User extends AbstractEntity {
 
   @Column({ type: 'timestamptz', nullable: true })
   emailVerifiedAt: Date | null;
+
+  /** Set when an administrator deletes the account. The row is kept so past work stays attributed; profiles are unlinked, not removed. */
+  @DeleteDateColumn({ type: 'timestamptz' })
+  deletedAt: Date | null;
 }

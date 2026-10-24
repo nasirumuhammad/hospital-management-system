@@ -3,7 +3,7 @@ import type { UserRole } from '@healthcare/types';
 export interface NavEntry {
   href: string;
   label: string;
-  icon: 'overview' | 'appointments' | 'patients' | 'doctors' | 'records' | 'prescriptions' | 'invoices' | 'accounts' | 'audit' | 'settings' | 'visits' | 'laboratory' | 'pharmacy' | 'inpatient' | 'maternity' | 'reports' | 'platform' | 'billing';
+  icon: 'overview' | 'appointments' | 'patients' | 'doctors' | 'records' | 'prescriptions' | 'invoices' | 'accounts' | 'audit' | 'settings' | 'visits' | 'laboratory' | 'pharmacy' | 'inpatient' | 'maternity' | 'reports' | 'platform' | 'billing' | 'staff';
   roles: UserRole[];
 }
 
@@ -16,6 +16,7 @@ export const NAV_ENTRIES: NavEntry[] = [
   { href: '/visits', label: 'Visits & queue', icon: 'visits', roles: ['ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'] },
   { href: '/patients', label: 'Patients', icon: 'patients', roles: ['ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'] },
   { href: '/doctors', label: 'Doctors', icon: 'doctors', roles: ALL },
+  { href: '/staff', label: 'Staff', icon: 'staff', roles: ['ADMIN'] },
   { href: '/medical-records', label: 'Medical records', icon: 'records', roles: ['ADMIN', 'DOCTOR', 'NURSE', 'PATIENT'] },
   { href: '/prescriptions', label: 'Prescriptions', icon: 'prescriptions', roles: ['ADMIN', 'DOCTOR', 'PATIENT', 'PHARMACIST'] },
   { href: '/laboratory', label: 'Laboratory', icon: 'laboratory', roles: ['ADMIN', 'DOCTOR', 'LAB'] },

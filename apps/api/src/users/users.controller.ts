@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
@@ -8,6 +8,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { LinkProfileDto } from './dto/link-profile.dto';
 import { ListUsersQueryDto } from './dto/list-users-query.dto';
 import { SetActiveDto } from './dto/set-active.dto';
+import { AccountRemovalService } from './account-removal.service';
 import { ProfileAccountService } from './profile-account.service';
 import { ProfileLinkService } from './profile-link.service';
 import { UsersService } from './users.service';
@@ -19,6 +20,7 @@ export class UsersController {
     private readonly users: UsersService,
     private readonly profileLinks: ProfileLinkService,
     private readonly profileAccounts: ProfileAccountService,
+    private readonly accountRemoval: AccountRemovalService,
   ) {}
 
   @Get()
@@ -28,7 +30,7 @@ export class UsersController {
 
   @Post()
   create(@Body() dto: CreateUserDto, @CurrentUser() actor: AuthenticatedUser) {
-    return this.users.create(dto, actor);
+    return this.profileAccounts.createAccount(dto, actor);
   }
 
   @Post('from-profile')
@@ -39,6 +41,12 @@ export class UsersController {
   @Patch(':id/active')
   setActive(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetActiveDto, @CurrentUser() actor: AuthenticatedUser) {
     return this.users.setActive(id, dto.isActive, actor);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthenticatedUser) {
+    return this.accountRemoval.remove(id, actor);
   }
 
   @Post('link-profile')

@@ -18,6 +18,7 @@ import { HospitalsModule } from "./hospitals/hospitals.module";
 import { InvoicesModule } from "./invoices/invoices.module";
 import { MedicalRecordsModule } from "./medical-records/medical-records.module";
 import { PatientsModule } from "./patients/patients.module";
+import { StaffModule } from "./staff/staff.module";
 import { PrescriptionsModule } from "./prescriptions/prescriptions.module";
 import { OperationsModule } from "./operations/operations.module";
 import { UsersModule } from "./users/users.module";
@@ -83,6 +84,7 @@ const SERVER_ERROR_STATUS = 500;
     UsersModule,
     AuthModule,
     PatientsModule,
+    StaffModule,
     DoctorsModule,
     AppointmentsModule,
     MedicalRecordsModule,

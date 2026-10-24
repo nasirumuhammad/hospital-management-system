@@ -1,0 +1,1259 @@
+
+--- a/README.md	2026-10-22 17:56:06.000000000 +0000
++++ b/README.md	2026-10-24 05:49:02.539951789 +0000
+@@ -109,3 +109,17 @@
+ 
+ Read `docs/PRODUCTION-CHECKLIST.md` first. Essentials: serve web and API over HTTPS on the same registrable domain (cookies are `SameSite=Lax`, `Secure` in production), set `TRUST_PROXY`, real `JWT_SECRET`, `MAIL_TRANSPORT=resend` with `RESEND_API_KEY` and `MAIL_FROM`, run `migration:run:prod` before starting the new API version, and remove `ADMIN_*` after the first start.
+ `docs/LEGACY-MIGRATION.md` describes importing data from the original PHP/MySQL system, which needs its database dump and has not been performed.
++
++## People vs. accounts
++
++A sign-in account (`staff_users`) is separate from the person it belongs to:
++
++| Person record | Table | Roles |
++| --- | --- | --- |
++| Patient | `patients` | PATIENT |
++| Doctor | `doctors` | DOCTOR |
++| Staff member | `staff_members` | ADMIN, NURSE, RECEPTIONIST, CASHIER, LAB, PHARMACIST, HMO_DESK, WARD_MANAGER |
++
++- A person record can exist with no login, and a login can be given later (**Create login** / **Link profile**).
++- **Deleting an account** (`DELETE /api/users/:id`, Accounts page) unlinks the person record and keeps it. The account row is soft-deleted, not erased, so triage, payments, dispensing and audit entries still say who did the work. The e-mail address is freed and the person can be given a new login.
++- Creating a staff-role account on the Accounts page also creates its staff record; the role on the account and the staff record must match.
+
+--- a/apps/api/src/app.module.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/api/src/app.module.ts	2026-10-24 05:49:02.595255140 +0000
+@@ -18,6 +18,7 @@
+ import { InvoicesModule } from "./invoices/invoices.module";
+ import { MedicalRecordsModule } from "./medical-records/medical-records.module";
+ import { PatientsModule } from "./patients/patients.module";
++import { StaffModule } from "./staff/staff.module";
+ import { PrescriptionsModule } from "./prescriptions/prescriptions.module";
+ import { OperationsModule } from "./operations/operations.module";
+ import { UsersModule } from "./users/users.module";
+@@ -83,6 +84,7 @@
+     UsersModule,
+     AuthModule,
+     PatientsModule,
++    StaffModule,
+     DoctorsModule,
+     AppointmentsModule,
+     MedicalRecordsModule,
+
+--- a/apps/api/src/common/enums/audit-action.enum.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/api/src/common/enums/audit-action.enum.ts	2026-10-24 05:49:02.545063616 +0000
+@@ -10,6 +10,10 @@
+   USER_CREATED = 'USER_CREATED',
+   USER_ENABLED = 'USER_ENABLED',
+   USER_DISABLED = 'USER_DISABLED',
++  USER_DELETED = 'USER_DELETED',
++  STAFF_CREATED = 'STAFF_CREATED',
++  STAFF_UPDATED = 'STAFF_UPDATED',
++  STAFF_DELETED = 'STAFF_DELETED',
+   PROFILE_LINKED = 'PROFILE_LINKED',
+   PATIENT_CREATED = 'PATIENT_CREATED',
+   PATIENT_UPDATED = 'PATIENT_UPDATED',
+
+--- a/apps/api/src/common/enums/audit-target.enum.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/api/src/common/enums/audit-target.enum.ts	2026-10-24 05:49:02.545142162 +0000
+@@ -2,6 +2,7 @@
+   USER = 'user',
+   PATIENT = 'patient',
+   DOCTOR = 'doctor',
++  STAFF = 'staff',
+   APPOINTMENT = 'appointment',
+   MEDICAL_RECORD = 'medical_record',
+   PRESCRIPTION = 'prescription',
+
+--- a/apps/api/src/common/enums/profile-type.enum.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/api/src/common/enums/profile-type.enum.ts	2026-10-24 05:49:02.545394823 +0000
+@@ -1,4 +1,5 @@
+ export enum ProfileType {
+   PATIENT = 'PATIENT',
+   DOCTOR = 'DOCTOR',
++  STAFF = 'STAFF',
+ }
+
+--- a/apps/api/src/database/migrations/1765000000000-StaffProfiles.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/api/src/database/migrations/1765000000000-StaffProfiles.ts	2026-10-24 05:49:02.577981027 +0000
+@@ -0,0 +1,58 @@
++import { MigrationInterface, QueryRunner } from 'typeorm';
++
++/**
++ * Separates the person from the sign-in account for every role, not only patients and doctors.
++ *  1. staff_members: the person record for nurses, cashiers, lab, pharmacy, ward, front-desk and admin users.
++ *  2. Backfills one staff member for every existing staff account and links it.
++ *  3. staff_users.deletedAt: deleting an account keeps the row (history stays attributed) and unlinks the profile.
++ */
++export class StaffProfiles1765000000000 implements MigrationInterface {
++  name = 'StaffProfiles1765000000000';
++
++  async up(q: QueryRunner): Promise<void> {
++    await q.query(`ALTER TABLE "staff_users" ADD COLUMN "deletedAt" timestamptz`);
++
++    await q.query(`CREATE TABLE "staff_members" (
++      "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
++      "hospitalId" uuid NOT NULL,
++      "firstName" varchar(100) NOT NULL,
++      "lastName" varchar(100) NOT NULL,
++      "email" varchar(180) NOT NULL,
++      "phone" varchar(30),
++      "role" varchar(20) NOT NULL,
++      "jobTitle" varchar(120),
++      "isActive" boolean NOT NULL DEFAULT true,
++      "userId" uuid,
++      "deletedAt" timestamptz,
++      "createdAt" timestamptz NOT NULL DEFAULT now(),
++      "updatedAt" timestamptz NOT NULL DEFAULT now(),
++      CONSTRAINT "PK_staff_members_id" PRIMARY KEY ("id"),
++      CONSTRAINT "CHK_staff_members_role" CHECK ("role" IN ('ADMIN','NURSE','RECEPTIONIST','CASHIER','LAB','PHARMACIST','HMO_DESK','WARD_MANAGER')),
++      CONSTRAINT "FK_staff_members_hospital" FOREIGN KEY ("hospitalId") REFERENCES "hospitals"("id") ON DELETE RESTRICT,
++      CONSTRAINT "FK_staff_members_user" FOREIGN KEY ("userId") REFERENCES "staff_users"("id") ON DELETE SET NULL
++    )`);
++    await q.query(`CREATE UNIQUE INDEX "UQ_staff_members_id_hospital" ON "staff_members" ("id","hospitalId")`);
++    await q.query(`CREATE UNIQUE INDEX "UQ_staff_members_hospital_email" ON "staff_members" ("hospitalId","email") WHERE "deletedAt" IS NULL`);
++    await q.query(`CREATE UNIQUE INDEX "UQ_staff_members_userId_active" ON "staff_members" ("userId") WHERE "deletedAt" IS NULL`);
++    await q.query(`CREATE INDEX "IDX_staff_members_hospital_role" ON "staff_members" ("hospitalId","role")`);
++
++    // One profile per existing staff account: first word of the name is the first name, the rest the last name.
++    await q.query(`INSERT INTO "staff_members" ("hospitalId","firstName","lastName","email","role","isActive","userId")
++      SELECT u."hospitalId",
++             split_part(btrim(u."name"), ' ', 1),
++             COALESCE(NULLIF(btrim(substr(btrim(u."name"), length(split_part(btrim(u."name"), ' ', 1)) + 1)), ''), '-'),
++             u."email", u."role", u."isActive", u."id"
++      FROM "staff_users" u
++      WHERE u."hospitalId" IS NOT NULL
++        AND u."role" IN ('ADMIN','NURSE','RECEPTIONIST','CASHIER','LAB','PHARMACIST','HMO_DESK','WARD_MANAGER')`);
++
++    await q.query(`ALTER TABLE "staff_members" ADD CONSTRAINT "FK_staff_members_user_tenant" FOREIGN KEY ("userId","hospitalId") REFERENCES "staff_users"("id","hospitalId") ON DELETE RESTRICT`);
++    // Same pairing patients and doctors already use: FK_staff_members_user (SET NULL) fires first and clears userId, so the
++    // composite tenant FK (which only guards against linking an account from another hospital) has nothing left to restrict.
++  }
++
++  async down(q: QueryRunner): Promise<void> {
++    await q.query(`DROP TABLE "staff_members"`);
++    await q.query(`ALTER TABLE "staff_users" DROP COLUMN "deletedAt"`);
++  }
++}
+
+--- a/apps/api/src/staff/dto/create-staff-member.dto.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/api/src/staff/dto/create-staff-member.dto.ts	2026-10-24 05:49:02.594250618 +0000
+@@ -0,0 +1,15 @@
++import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
++import { UserRole } from '../../common/enums/user-role.enum';
++import { NormalizedEmail } from '../../common/validators/normalized-email.decorator';
++import { IsPhoneLike } from '../../common/validators/phone.decorator';
++import { Trimmed } from '../../common/validators/trimmed.decorator';
++import { STAFF_ROLES } from '../staff-roles';
++
++export class CreateStaffMemberDto {
++  @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) firstName: string;
++  @Trimmed() @IsString() @IsNotEmpty() @MaxLength(100) lastName: string;
++  @NormalizedEmail() email: string;
++  @IsIn(STAFF_ROLES) role: UserRole;
++  @IsOptional() @IsPhoneLike() phone?: string | null;
++  @IsOptional() @Trimmed() @IsString() @MaxLength(120) jobTitle?: string | null;
++}
+
+--- a/apps/api/src/staff/dto/list-staff-query.dto.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/api/src/staff/dto/list-staff-query.dto.ts	2026-10-24 05:49:02.594510106 +0000
+@@ -0,0 +1,15 @@
++import { Transform } from 'class-transformer';
++import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
++import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
++import { UserRole } from '../../common/enums/user-role.enum';
++import { STAFF_ROLES } from '../staff-roles';
++
++export class ListStaffQueryDto extends PaginationQueryDto {
++  @IsOptional() @IsString() @MaxLength(100) q?: string;
++  @IsOptional() @IsIn(STAFF_ROLES) role?: UserRole;
++
++  @IsOptional()
++  @Transform(({ value }) => value === true || value === 'true' ? true : value === false || value === 'false' ? false : value)
++  @IsBoolean()
++  includeInactive?: boolean;
++}
+
+--- a/apps/api/src/staff/dto/update-staff-member.dto.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/api/src/staff/dto/update-staff-member.dto.ts	2026-10-24 05:49:02.594411497 +0000
+@@ -0,0 +1,7 @@
++import { PartialType } from '@nestjs/mapped-types';
++import { IsBoolean, IsOptional } from 'class-validator';
++import { CreateStaffMemberDto } from './create-staff-member.dto';
++
++export class UpdateStaffMemberDto extends PartialType(CreateStaffMemberDto) {
++  @IsOptional() @IsBoolean() isActive?: boolean;
++}
+
+--- a/apps/api/src/staff/entities/staff-member.entity.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/api/src/staff/entities/staff-member.entity.ts	2026-10-24 05:49:02.594622032 +0000
+@@ -0,0 +1,45 @@
++import { Column, DeleteDateColumn, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
++import { AbstractEntity } from '../../common/entities/abstract.entity';
++import { UserRole } from '../../common/enums/user-role.enum';
++import { User } from '../../users/entities/user.entity';
++
++/** The person behind a nurse, cashier, lab, pharmacy, ward or front-desk login. Lives independently of the sign-in account. */
++@Entity('staff_members')
++@Index('UQ_staff_members_hospital_email', ['hospitalId', 'email'], { unique: true, where: '"deletedAt" IS NULL' })
++@Index('UQ_staff_members_userId_active', ['userId'], { unique: true, where: '"deletedAt" IS NULL' })
++export class StaffMember extends AbstractEntity {
++  @Column({ type: 'uuid' })
++  hospitalId: string;
++
++  @Column({ type: 'varchar', length: 100 })
++  firstName: string;
++
++  @Column({ type: 'varchar', length: 100 })
++  lastName: string;
++
++  @Column({ type: 'varchar', length: 180 })
++  email: string;
++
++  @Column({ type: 'varchar', length: 30, nullable: true })
++  phone: string | null;
++
++  /** Must equal the linked account's role. */
++  @Column({ type: 'varchar', length: 20 })
++  role: UserRole;
++
++  @Column({ type: 'varchar', length: 120, nullable: true })
++  jobTitle: string | null;
++
++  @Column({ type: 'boolean', default: true })
++  isActive: boolean;
++
++  @Column({ type: 'uuid', nullable: true })
++  userId: string | null;
++
++  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
++  @JoinColumn({ name: 'userId', foreignKeyConstraintName: 'FK_staff_members_user' })
++  user: User | null;
++
++  @DeleteDateColumn({ type: 'timestamptz' })
++  deletedAt: Date | null;
++}
+
+--- a/apps/api/src/staff/staff-roles.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/api/src/staff/staff-roles.ts	2026-10-24 05:49:02.594788156 +0000
+@@ -0,0 +1,16 @@
++import { UserRole } from '../common/enums/user-role.enum';
++
++/**
++ * Roles whose person-record lives in `staff_members`.
++ * Doctors and patients keep their own specialised profile tables; SUPER_ADMIN is a platform account with no hospital.
++ */
++export const STAFF_ROLES: UserRole[] = [
++  UserRole.ADMIN,
++  UserRole.NURSE,
++  UserRole.RECEPTIONIST,
++  UserRole.CASHIER,
++  UserRole.LAB,
++  UserRole.PHARMACIST,
++  UserRole.HMO_DESK,
++  UserRole.WARD_MANAGER,
++];
+
+--- a/apps/api/src/staff/staff.controller.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/api/src/staff/staff.controller.ts	2026-10-24 05:49:02.595099814 +0000
+@@ -0,0 +1,41 @@
++import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
++import { CurrentUser } from '../common/decorators/current-user.decorator';
++import { Roles } from '../common/decorators/roles.decorator';
++import { UserRole } from '../common/enums/user-role.enum';
++import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
++import { CreateStaffMemberDto } from './dto/create-staff-member.dto';
++import { ListStaffQueryDto } from './dto/list-staff-query.dto';
++import { UpdateStaffMemberDto } from './dto/update-staff-member.dto';
++import { StaffService } from './staff.service';
++
++@Controller('staff')
++@Roles(UserRole.ADMIN)
++export class StaffController {
++  constructor(private readonly staff: StaffService) {}
++
++  @Get()
++  list(@Query() query: ListStaffQueryDto, @CurrentUser() actor: AuthenticatedUser) {
++    return this.staff.list(query, actor);
++  }
++
++  @Get(':id')
++  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthenticatedUser) {
++    return this.staff.findOrFail(id, actor);
++  }
++
++  @Post()
++  create(@Body() dto: CreateStaffMemberDto, @CurrentUser() actor: AuthenticatedUser) {
++    return this.staff.create(dto, actor);
++  }
++
++  @Patch(':id')
++  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateStaffMemberDto, @CurrentUser() actor: AuthenticatedUser) {
++    return this.staff.update(id, dto, actor);
++  }
++
++  @Delete(':id')
++  @HttpCode(HttpStatus.NO_CONTENT)
++  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthenticatedUser) {
++    return this.staff.remove(id, actor);
++  }
++}
+
+--- a/apps/api/src/staff/staff.module.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/api/src/staff/staff.module.ts	2026-10-24 05:49:02.595170625 +0000
+@@ -0,0 +1,14 @@
++import { Module } from '@nestjs/common';
++import { TypeOrmModule } from '@nestjs/typeorm';
++import { StaffMember } from './entities/staff-member.entity';
++import { StaffController } from './staff.controller';
++import { StaffRepository } from './staff.repository';
++import { StaffService } from './staff.service';
++
++@Module({
++  imports: [TypeOrmModule.forFeature([StaffMember])],
++  controllers: [StaffController],
++  providers: [StaffRepository, StaffService],
++  exports: [StaffService],
++})
++export class StaffModule {}
+
+--- a/apps/api/src/staff/staff.repository.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/api/src/staff/staff.repository.ts	2026-10-24 05:49:02.594869310 +0000
+@@ -0,0 +1,73 @@
++import { Injectable } from '@nestjs/common';
++import { InjectRepository } from '@nestjs/typeorm';
++import { Repository } from 'typeorm';
++import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
++import { toContainsPattern } from '../common/utils/escape-like.util';
++import { paginate } from '../common/utils/pagination.util';
++import { applySort, SortMap } from '../common/utils/sort.util';
++import { ListStaffQueryDto } from './dto/list-staff-query.dto';
++import { StaffMember } from './entities/staff-member.entity';
++
++const SORTABLE: SortMap = {
++  name: ['staff.lastName', 'staff.firstName'],
++  role: 'staff.role',
++  jobTitle: 'staff.jobTitle',
++  email: 'staff.email',
++  status: 'staff.isActive',
++};
++
++@Injectable()
++export class StaffRepository {
++  constructor(@InjectRepository(StaffMember) private readonly repository: Repository<StaffMember>) {}
++
++  findById(id: string, hospitalId: string): Promise<StaffMember | null> {
++    return this.repository.findOneBy({ id, hospitalId });
++  }
++
++  findByUserId(userId: string, hospitalId: string): Promise<StaffMember | null> {
++    return this.repository.findOneBy({ userId, hospitalId });
++  }
++
++  findByEmail(email: string, hospitalId: string): Promise<StaffMember | null> {
++    return this.repository.findOneBy({ email, hospitalId });
++  }
++
++  existsByUserId(userId: string, hospitalId: string): Promise<boolean> {
++    return this.repository.existsBy({ userId, hospitalId });
++  }
++
++  existsByEmail(email: string, hospitalId: string, exceptId?: string): Promise<boolean> {
++    return this.repository
++      .createQueryBuilder('staff')
++      .where('staff.hospitalId = :hospitalId AND staff.email = :email', { hospitalId, email })
++      .andWhere(exceptId ? 'staff.id <> :exceptId' : '1=1', { exceptId })
++      .getExists();
++  }
++
++  create(data: Partial<StaffMember>): StaffMember {
++    return this.repository.create(data);
++  }
++
++  save(member: StaffMember): Promise<StaffMember> {
++    return this.repository.save(member);
++  }
++
++  async softDelete(id: string, hospitalId: string): Promise<void> {
++    await this.repository.update({ id, hospitalId }, { isActive: false });
++    await this.repository.softDelete({ id, hospitalId });
++  }
++
++  search(query: ListStaffQueryDto, includeInactive: boolean, hospitalId: string): Promise<PaginatedResult<StaffMember>> {
++    const builder = this.repository.createQueryBuilder('staff').where('staff.hospitalId = :hospitalId', { hospitalId });
++    if (!includeInactive) builder.andWhere('staff.isActive = true');
++    if (query.role) builder.andWhere('staff.role = :role', { role: query.role });
++    if (query.q) {
++      builder.andWhere(
++        `(staff."firstName" || ' ' || staff."lastName" ILIKE :pattern OR staff."jobTitle" ILIKE :pattern OR staff.email ILIKE :pattern)`,
++        { pattern: toContainsPattern(query.q) },
++      );
++    }
++    applySort(builder, query, SORTABLE, { sortBy: 'name', order: 'asc' }, 'staff.id');
++    return paginate(builder, query);
++  }
++}
+
+--- a/apps/api/src/staff/staff.service.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/api/src/staff/staff.service.ts	2026-10-24 05:49:02.594941114 +0000
+@@ -0,0 +1,99 @@
++import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
++import { AuditService } from '../audit/audit.service';
++import { AuditAction } from '../common/enums/audit-action.enum';
++import { AuditTarget } from '../common/enums/audit-target.enum';
++import { UserRole } from '../common/enums/user-role.enum';
++import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
++import { PaginatedResult } from '../common/interfaces/paginated-result.interface';
++import { assertNoNulls } from '../common/utils/assert-no-nulls.util';
++import { CreateStaffMemberDto } from './dto/create-staff-member.dto';
++import { ListStaffQueryDto } from './dto/list-staff-query.dto';
++import { UpdateStaffMemberDto } from './dto/update-staff-member.dto';
++import { StaffMember } from './entities/staff-member.entity';
++import { StaffRepository } from './staff.repository';
++
++const REQUIRED_FIELDS: (keyof UpdateStaffMemberDto)[] = ['firstName', 'lastName', 'email', 'role', 'isActive'];
++
++@Injectable()
++export class StaffService {
++  constructor(
++    private readonly repository: StaffRepository,
++    private readonly audit: AuditService,
++  ) {}
++
++  list(query: ListStaffQueryDto, actor: AuthenticatedUser): Promise<PaginatedResult<StaffMember>> {
++    return this.repository.search(query, query.includeInactive === true, this.requireHospital(actor));
++  }
++
++  async findOrFail(id: string, actor: AuthenticatedUser): Promise<StaffMember> {
++    const member = await this.repository.findById(id, this.requireHospital(actor));
++    if (!member) throw new NotFoundException('Staff member not found');
++    return member;
++  }
++
++  async create(dto: CreateStaffMemberDto, actor: AuthenticatedUser): Promise<StaffMember> {
++    const hospitalId = this.requireHospital(actor);
++    await this.assertEmailFree(dto.email, hospitalId);
++    const saved = await this.repository.save(this.repository.create({ ...dto, hospitalId }));
++    await this.record(AuditAction.STAFF_CREATED, actor, saved.id, { role: saved.role });
++    return saved;
++  }
++
++  async update(id: string, dto: UpdateStaffMemberDto, actor: AuthenticatedUser): Promise<StaffMember> {
++    assertNoNulls(dto, REQUIRED_FIELDS);
++    const member = await this.findOrFail(id, actor);
++    if (dto.role && dto.role !== member.role && member.userId) {
++      throw new ConflictException('This person has a login. Delete the account first, then change their role.');
++    }
++    if (dto.email && dto.email !== member.email) await this.assertEmailFree(dto.email, member.hospitalId, id);
++    const saved = await this.repository.save(Object.assign(member, dto));
++    await this.record(AuditAction.STAFF_UPDATED, actor, id);
++    return saved;
++  }
++
++  async remove(id: string, actor: AuthenticatedUser): Promise<void> {
++    const member = await this.findOrFail(id, actor);
++    if (member.userId) throw new ConflictException('This person still has a login. Delete or disable the account first.');
++    await this.repository.softDelete(id, this.requireHospital(actor));
++    await this.record(AuditAction.STAFF_DELETED, actor, id);
++  }
++
++  /** An account created directly with a staff role gets its person record straight away, so no staff login exists without one. */
++  async createForAccount(account: { id: string; name: string; email: string; role: UserRole }, actor: AuthenticatedUser): Promise<StaffMember> {
++    const hospitalId = this.requireHospital(actor);
++    const existing = await this.repository.findByEmail(account.email, hospitalId);
++    if (existing && !existing.userId && existing.role === account.role) return this.linkUser(existing.id, account.id, actor);
++    const [firstName, ...rest] = account.name.trim().split(/\s+/);
++    const saved = await this.repository.save(this.repository.create({
++      hospitalId, firstName, lastName: rest.join(' ') || '-', email: account.email, role: account.role, userId: account.id,
++    }));
++    await this.record(AuditAction.STAFF_CREATED, actor, saved.id, { role: saved.role, fromAccount: account.id });
++    return saved;
++  }
++
++  /** Called by the account-linking flow; the account's role has already been checked against `member.role`. */
++  async linkUser(staffId: string, userId: string, actor: AuthenticatedUser): Promise<StaffMember> {
++    const member = await this.findOrFail(staffId, actor);
++    if (member.userId && member.userId !== userId) throw new ConflictException('Staff profile is already linked');
++    if (await this.repository.existsByUserId(userId, this.requireHospital(actor))) throw new ConflictException('This account already has a staff profile');
++    member.userId = userId;
++    const saved = await this.repository.save(member);
++    await this.record(AuditAction.PROFILE_LINKED, actor, staffId, { userId });
++    return saved;
++  }
++
++  private async assertEmailFree(email: string, hospitalId: string, exceptId?: string): Promise<void> {
++    if (await this.repository.existsByEmail(email, hospitalId, exceptId)) {
++      throw new BadRequestException('A staff member with this email already exists');
++    }
++  }
++
++  private requireHospital(actor: AuthenticatedUser): string {
++    if (!actor.hospitalId) throw new NotFoundException('A hospital must be selected for this operation');
++    return actor.hospitalId;
++  }
++
++  private record(action: AuditAction, actor: AuthenticatedUser, targetId: string, metadata?: Record<string, unknown>) {
++    return this.audit.record({ hospitalId: this.requireHospital(actor), actorId: actor.id, action, targetType: AuditTarget.STAFF, targetId, metadata });
++  }
++}
+
+--- a/apps/api/src/users/account-removal.service.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/api/src/users/account-removal.service.ts	2026-10-24 05:49:02.593894720 +0000
+@@ -0,0 +1,61 @@
++import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
++import { DataSource } from 'typeorm';
++import { AuditService } from '../audit/audit.service';
++import { AuditAction } from '../common/enums/audit-action.enum';
++import { AuditTarget } from '../common/enums/audit-target.enum';
++import { UserRole } from '../common/enums/user-role.enum';
++import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
++import { UsersService } from './users.service';
++
++const PROFILE_TABLES = ['patients', 'doctors', 'staff_members'] as const;
++
++/**
++ * Deletes a sign-in account without touching the person's record.
++ *
++ * Patient, doctor and staff profiles are only unlinked (userId -> NULL), so they stay, can be given a new login later,
++ * and everything they own is untouched. The account row itself is soft-deleted rather than erased because past work
++ * (triage, payments, dispensing, audit entries...) points at it; keeping it means that history still says who did what.
++ */
++@Injectable()
++export class AccountRemovalService {
++  constructor(
++    private readonly dataSource: DataSource,
++    private readonly users: UsersService,
++    private readonly audit: AuditService,
++  ) {}
++
++  async remove(id: string, actor: AuthenticatedUser): Promise<void> {
++    if (id === actor.id) throw new BadRequestException('You cannot delete your own account');
++    if (!actor.hospitalId) throw new NotFoundException('A hospital must be selected for this operation');
++    const user = await this.users.getByIdOrFail(id);
++    if (user.hospitalId !== actor.hospitalId) throw new NotFoundException('Account not found');
++    if (user.role === UserRole.SUPER_ADMIN) throw new BadRequestException('Platform accounts cannot be deleted here');
++
++    const unlinked: string[] = [];
++    await this.dataSource.transaction(async (manager) => {
++      for (const table of PROFILE_TABLES) {
++        const rows: unknown[] = await manager.query(
++          `UPDATE "${table}" SET "userId" = NULL, "updatedAt" = now() WHERE "userId" = $1 AND "hospitalId" = $2 RETURNING "id"`,
++          [id, user.hospitalId],
++        ).then(([result]: [unknown[]]) => result);
++        if (rows.length > 0) unlinked.push(table);
++      }
++      await manager.query(`DELETE FROM "refresh_tokens" WHERE "userId" = $1`, [id]);
++      await manager.query(`DELETE FROM "user_tokens" WHERE "userId" = $1`, [id]);
++      // Free the e-mail address so the person can be given a new account, and make sure the old one can never sign in.
++      await manager.query(
++        `UPDATE "staff_users" SET "isActive" = false, "tokenVersion" = "tokenVersion" + 1, "email" = $2, "deletedAt" = now(), "updatedAt" = now() WHERE "id" = $1`,
++        [id, `deleted+${id}@deleted.invalid`],
++      );
++    });
++
++    await this.audit.record({
++      hospitalId: actor.hospitalId,
++      actorId: actor.id,
++      action: AuditAction.USER_DELETED,
++      targetType: AuditTarget.USER,
++      targetId: id,
++      metadata: { role: user.role, profilesUnlinked: unlinked },
++    });
++  }
++}
+
+--- a/apps/api/src/users/entities/user.entity.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/api/src/users/entities/user.entity.ts	2026-10-24 05:49:02.592485237 +0000
+@@ -1,4 +1,4 @@
+-import { Column, Entity, Unique } from 'typeorm';
++import { Column, DeleteDateColumn, Entity, Unique } from 'typeorm';
+ import { AbstractEntity } from '../../common/entities/abstract.entity';
+ import { UserRole } from '../../common/enums/user-role.enum';
+ 
+@@ -28,4 +28,8 @@
+ 
+   @Column({ type: 'timestamptz', nullable: true })
+   emailVerifiedAt: Date | null;
++
++  /** Set when an administrator deletes the account. The row is kept so past work stays attributed; profiles are unlinked, not removed. */
++  @DeleteDateColumn({ type: 'timestamptz' })
++  deletedAt: Date | null;
+ }
+
+--- a/apps/api/src/users/profile-account.service.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/api/src/users/profile-account.service.ts	2026-10-24 05:49:02.592799744 +0000
+@@ -1,11 +1,15 @@
+ import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+ import { ProfileType } from '../common/enums/profile-type.enum';
++import { UserRole } from '../common/enums/user-role.enum';
+ import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
+ import { DoctorsService } from '../doctors/doctors.service';
+ import { PatientsService } from '../patients/patients.service';
++import { StaffService } from '../staff/staff.service';
++import { STAFF_ROLES } from '../staff/staff-roles';
+ import { CreateProfileAccountDto } from './dto/create-profile-account.dto';
++import { CreateUserDto } from './dto/create-user.dto';
+ import { ProfileLinkService } from './profile-link.service';
+-import { ROLE_FOR_PROFILE } from './profile-role.constants';
++import { FIXED_ROLE_FOR_PROFILE } from './profile-role.constants';
+ import { UserResponse } from './user.mapper';
+ import { UsersService } from './users.service';
+ 
+@@ -16,15 +20,17 @@
+   lastName: string;
+   email: string | null;
+   userId: string | null;
++  role?: UserRole;
+ }
+ 
+-/** Gives an existing patient or doctor record a login: creates the account, e-mails an invitation and links it. */
++/** Gives an existing patient, doctor or staff record a login: creates the account, e-mails an invitation and links it. */
+ @Injectable()
+ export class ProfileAccountService {
+   constructor(
+     private readonly users: UsersService,
+     private readonly patients: PatientsService,
+     private readonly doctors: DoctorsService,
++    private readonly staff: StaffService,
+     private readonly profileLinks: ProfileLinkService,
+   ) {}
+ 
+@@ -32,16 +38,26 @@
+     const profile = await this.findProfile(dto, actor);
+     if (profile.userId) throw new ConflictException('This profile already has a login');
+     if (!profile.email) throw new BadRequestException('Add an email address to this profile before creating a login');
+-    const account = await this.users.create(
+-      { email: profile.email, name: this.accountName(profile), role: ROLE_FOR_PROFILE[dto.profileType] },
+-      actor,
+-    );
++    const role = profile.role ?? FIXED_ROLE_FOR_PROFILE[dto.profileType];
++    if (!role) throw new BadRequestException('This profile type cannot have a login');
++    const account = await this.users.create({ email: profile.email, name: this.accountName(profile), role }, actor);
+     await this.profileLinks.link({ userId: account.id, profileType: dto.profileType, profileId: dto.profileId }, actor);
+     return account;
+   }
+ 
++  /** Creates a standalone account; staff roles also get their person record so the two are never out of step. */
++  async createAccount(dto: CreateUserDto, actor: AuthenticatedUser): Promise<UserResponse> {
++    const account = await this.users.create(dto, actor);
++    if (STAFF_ROLES.includes(account.role)) await this.staff.createForAccount(account, actor);
++    return account;
++  }
++
+   private findProfile(dto: CreateProfileAccountDto, actor: AuthenticatedUser): Promise<ProfileIdentity> {
+-    return dto.profileType === ProfileType.PATIENT ? this.patients.findOrFail(dto.profileId, actor) : this.doctors.findOrFail(dto.profileId, actor);
++    switch (dto.profileType) {
++      case ProfileType.PATIENT: return this.patients.findOrFail(dto.profileId, actor);
++      case ProfileType.DOCTOR: return this.doctors.findOrFail(dto.profileId, actor);
++      default: return this.staff.findOrFail(dto.profileId, actor);
++    }
+   }
+ 
+   private accountName(profile: ProfileIdentity): string {
+
+--- a/apps/api/src/users/profile-link.service.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/api/src/users/profile-link.service.ts	2026-10-24 05:49:02.592944748 +0000
+@@ -3,8 +3,9 @@
+ import { AuthenticatedUser } from '../common/interfaces/authenticated-user.interface';
+ import { DoctorsService } from '../doctors/doctors.service';
+ import { PatientsService } from '../patients/patients.service';
++import { StaffService } from '../staff/staff.service';
+ import { LinkProfileDto } from './dto/link-profile.dto';
+-import { ROLE_FOR_PROFILE } from './profile-role.constants';
++import { FIXED_ROLE_FOR_PROFILE } from './profile-role.constants';
+ import { UsersService } from './users.service';
+ 
+ @Injectable()
+@@ -13,6 +14,7 @@
+     private readonly users: UsersService,
+     private readonly patients: PatientsService,
+     private readonly doctors: DoctorsService,
++    private readonly staff: StaffService,
+   ) {}
+ 
+   async link(dto: LinkProfileDto, actor: AuthenticatedUser) {
+@@ -20,7 +22,12 @@
+     if (!actor.hospitalId || user.hospitalId !== actor.hospitalId) {
+       throw new BadRequestException('Account and profile must belong to the same hospital');
+     }
+-    if (user.role !== ROLE_FOR_PROFILE[dto.profileType]) {
++    if (dto.profileType === ProfileType.STAFF) {
++      const member = await this.staff.findOrFail(dto.profileId, actor);
++      if (user.role !== member.role) throw new BadRequestException('Account role must match the staff member\'s role');
++      return this.staff.linkUser(dto.profileId, user.id, actor);
++    }
++    if (user.role !== FIXED_ROLE_FOR_PROFILE[dto.profileType]) {
+       throw new BadRequestException('Account role must match the profile type');
+     }
+     return dto.profileType === ProfileType.PATIENT
+
+--- a/apps/api/src/users/profile-role.constants.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/api/src/users/profile-role.constants.ts	2026-10-24 05:49:02.593029933 +0000
+@@ -1,7 +1,8 @@
+ import { ProfileType } from '../common/enums/profile-type.enum';
+ import { UserRole } from '../common/enums/user-role.enum';
+ 
+-export const ROLE_FOR_PROFILE: Record<ProfileType, UserRole> = {
++/** Patient and doctor profiles map to exactly one role. Staff profiles carry their own role (see StaffMember.role). */
++export const FIXED_ROLE_FOR_PROFILE: Partial<Record<ProfileType, UserRole>> = {
+   [ProfileType.PATIENT]: UserRole.PATIENT,
+   [ProfileType.DOCTOR]: UserRole.DOCTOR,
+ };
+
+--- a/apps/api/src/users/users.controller.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/api/src/users/users.controller.ts	2026-10-24 05:49:02.593416443 +0000
+@@ -1,4 +1,4 @@
+-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
++import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+ import { CurrentUser } from '../common/decorators/current-user.decorator';
+ import { Roles } from '../common/decorators/roles.decorator';
+ import { UserRole } from '../common/enums/user-role.enum';
+@@ -8,6 +8,7 @@
+ import { LinkProfileDto } from './dto/link-profile.dto';
+ import { ListUsersQueryDto } from './dto/list-users-query.dto';
+ import { SetActiveDto } from './dto/set-active.dto';
++import { AccountRemovalService } from './account-removal.service';
+ import { ProfileAccountService } from './profile-account.service';
+ import { ProfileLinkService } from './profile-link.service';
+ import { UsersService } from './users.service';
+@@ -19,6 +20,7 @@
+     private readonly users: UsersService,
+     private readonly profileLinks: ProfileLinkService,
+     private readonly profileAccounts: ProfileAccountService,
++    private readonly accountRemoval: AccountRemovalService,
+   ) {}
+ 
+   @Get()
+@@ -28,7 +30,7 @@
+ 
+   @Post()
+   create(@Body() dto: CreateUserDto, @CurrentUser() actor: AuthenticatedUser) {
+-    return this.users.create(dto, actor);
++    return this.profileAccounts.createAccount(dto, actor);
+   }
+ 
+   @Post('from-profile')
+@@ -41,6 +43,12 @@
+     return this.users.setActive(id, dto.isActive, actor);
+   }
+ 
++  @Delete(':id')
++  @HttpCode(HttpStatus.NO_CONTENT)
++  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthenticatedUser) {
++    return this.accountRemoval.remove(id, actor);
++  }
++
+   @Post('link-profile')
+   @HttpCode(HttpStatus.OK)
+   linkProfile(@Body() dto: LinkProfileDto, @CurrentUser() actor: AuthenticatedUser) {
+
+--- a/apps/api/src/users/users.module.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/api/src/users/users.module.ts	2026-10-24 05:49:02.593549484 +0000
+@@ -3,6 +3,8 @@
+ import { DoctorsModule } from '../doctors/doctors.module';
+ import { MailModule } from '../mail/mail.module';
+ import { PatientsModule } from '../patients/patients.module';
++import { StaffModule } from '../staff/staff.module';
++import { AccountRemovalService } from './account-removal.service';
+ import { AccountNotificationsService } from './account-notifications.service';
+ import { AdminBootstrapService } from './admin-bootstrap.service';
+ import { User } from './entities/user.entity';
+@@ -17,7 +19,7 @@
+ import { UsersService } from './users.service';
+ 
+ @Module({
+-  imports: [TypeOrmModule.forFeature([User, UserToken]), MailModule, PatientsModule, DoctorsModule],
++  imports: [TypeOrmModule.forFeature([User, UserToken]), MailModule, PatientsModule, DoctorsModule, StaffModule],
+   controllers: [UsersController],
+   providers: [
+     UsersRepository,
+@@ -28,6 +30,7 @@
+     AccountNotificationsService,
+     ProfileLinkService,
+     ProfileAccountService,
++    AccountRemovalService,
+     AdminBootstrapService,
+   ],
+   exports: [UsersService, PasswordService, UserTokensService, AccountNotificationsService],
+
+--- a/apps/api/test/staff-profiles.e2e-spec.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/api/test/staff-profiles.e2e-spec.ts	2026-10-24 05:49:02.596648532 +0000
+@@ -0,0 +1,98 @@
++import { ADMIN, createTestApp, loginAgent, newAgent, STRONG_PASSWORD, TestContext } from './utils/test-app';
++
++describe('Staff profiles are separate from accounts (e2e)', () => {
++  let ctx: TestContext;
++  let admin: Awaited<ReturnType<typeof loginAgent>>;
++
++  beforeAll(async () => {
++    ctx = await createTestApp();
++    admin = await loginAgent(ctx.app, ADMIN.email, ADMIN.password);
++  });
++
++  afterAll(async () => {
++    await ctx.app.close();
++  });
++
++  async function createStaff(email: string, role = 'NURSE'): Promise<string> {
++    const response = await admin.post('/api/staff').send({ firstName: 'Ngozi', lastName: 'Eze', email, role, jobTitle: 'Ward nurse' }).expect(201);
++    return response.body.id;
++  }
++
++  async function giveLogin(profileId: string, email: string) {
++    const account = (await admin.post('/api/users/from-profile').send({ profileType: 'STAFF', profileId }).expect(201)).body;
++    await newAgent(ctx.app).post('/api/auth/reset-password').send({ token: ctx.mail.tokenFor(email, 'account-invitation'), newPassword: STRONG_PASSWORD }).expect(204);
++    return account;
++  }
++
++  it('creates a staff record with no account, then gives it a login with the matching role', async () => {
++    const email = 'ngozi.eze@example.com';
++    const id = await createStaff(email);
++    expect((await admin.get(`/api/staff/${id}`).expect(200)).body.userId).toBeNull();
++
++    const account = await giveLogin(id, email);
++    expect(account).toMatchObject({ email, name: 'Ngozi Eze', role: 'NURSE' });
++    expect((await admin.get(`/api/staff/${id}`).expect(200)).body.userId).toBe(account.id);
++  });
++
++  it('keeps the staff record, and the work the account did, when the account is deleted', async () => {
++    const email = 'cashier.one@example.com';
++    const id = await createStaff(email, 'CASHIER');
++    const account = await giveLogin(id, email);
++    const cashier = await loginAgent(ctx.app, email, STRONG_PASSWORD);
++
++    await admin.delete(`/api/users/${account.id}`).expect(204);
++
++    const profile = (await admin.get(`/api/staff/${id}`).expect(200)).body;
++    expect(profile).toMatchObject({ id, email, role: 'CASHIER', isActive: true, userId: null });
++    await cashier.get('/api/auth/me').expect(401);
++    await newAgent(ctx.app).post('/api/auth/login').send({ email, password: STRONG_PASSWORD }).expect(401);
++    const accounts = (await admin.get('/api/users').query({ q: 'cashier.one' }).expect(200)).body;
++    expect(accounts.items).toHaveLength(0);
++
++    // The same person can be given a brand-new login afterwards.
++    const second = (await admin.post('/api/users/from-profile').send({ profileType: 'STAFF', profileId: id }).expect(201)).body;
++    expect(second.id).not.toBe(account.id);
++  });
++
++  it('keeps doctor and patient records when their accounts are deleted', async () => {
++    const doctorId = (await admin.post('/api/doctors').send({ firstName: 'Tunde', lastName: 'Bello', email: 'tunde@example.com', specialty: 'Cardiology' }).expect(201)).body.id;
++    const account = (await admin.post('/api/users/from-profile').send({ profileType: 'DOCTOR', profileId: doctorId }).expect(201)).body;
++    await admin.delete(`/api/users/${account.id}`).expect(204);
++    expect((await admin.get(`/api/doctors/${doctorId}`).expect(200)).body.userId).toBeNull();
++  });
++
++  it('creating a standalone staff-role account also creates its staff record', async () => {
++    const email = 'lab.tech@example.com';
++    const account = (await admin.post('/api/users').send({ email, name: 'Ife Lab', role: 'LAB' }).expect(201)).body;
++    const staff = (await admin.get('/api/staff').query({ q: email }).expect(200)).body.items;
++    expect(staff).toHaveLength(1);
++    expect(staff[0]).toMatchObject({ role: 'LAB', userId: account.id, firstName: 'Ife', lastName: 'Lab' });
++  });
++
++  it('refuses mismatched roles, role changes while linked, removing a profile that has a login, and self-deletion', async () => {
++    const email = 'ward.mgr@example.com';
++    const id = await createStaff(email, 'WARD_MANAGER');
++    const nurseAccount = (await admin.post('/api/users').send({ email: 'other.nurse@example.com', name: 'Other Nurse', role: 'NURSE' }).expect(201)).body;
++    await admin.post('/api/users/link-profile').send({ userId: nurseAccount.id, profileType: 'STAFF', profileId: id }).expect(400);
++
++    const account = (await admin.post('/api/users/from-profile').send({ profileType: 'STAFF', profileId: id }).expect(201)).body;
++    await admin.patch(`/api/staff/${id}`).send({ role: 'CASHIER' }).expect(409);
++    await admin.delete(`/api/staff/${id}`).expect(409);
++    await admin.post('/api/staff').send({ firstName: 'X', lastName: 'Y', email, role: 'NURSE' }).expect(400);
++    await admin.post('/api/staff').send({ firstName: 'X', lastName: 'Y', email: 'doc@example.com', role: 'DOCTOR' }).expect(400);
++
++    const me = (await admin.get('/api/auth/me')).body;
++    await admin.delete(`/api/users/${me.id}`).expect(400);
++    await admin.delete(`/api/users/${account.id}`).expect(204);
++    await admin.delete(`/api/staff/${id}`).expect(204);
++  });
++
++  it('only administrators can manage staff records', async () => {
++    const email = 'plain.nurse@example.com';
++    const id = await createStaff(email);
++    await giveLogin(id, email);
++    const nurse = await loginAgent(ctx.app, email, STRONG_PASSWORD);
++    await nurse.get('/api/staff').expect(403);
++    await nurse.post('/api/staff').send({ firstName: 'A', lastName: 'B', email: 'a@b.com', role: 'NURSE' }).expect(403);
++  });
++});
+
+--- a/apps/web/app/(dashboard)/accounts/_components/account-actions.client.tsx	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/web/app/(dashboard)/accounts/_components/account-actions.client.tsx	2026-10-24 05:49:02.682718876 +0000
+@@ -2,6 +2,7 @@
+ import { Plus } from 'lucide-react';
+ import { useState } from 'react';
+ import { USER_ROLES, type SessionUser } from '@healthcare/types';
++import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+ import { ErrorBanner } from '@/components/ui/Feedback';
+ import { ComboboxField } from '@/components/ui/ComboboxField';
+ import { Field, Select } from '@/components/ui/Fields';
+@@ -9,7 +10,7 @@
+ import { api, errorMessage } from '@/lib/api-client';
+ import { titleCase } from '@/lib/format';
+ import { readForm } from '@/lib/form';
+-import { fetchDoctorOptions, fetchPatientOptions } from '@/lib/option-fetchers';
++import { fetchDoctorOptions, fetchPatientOptions, staffOptionsFetcher } from '@/lib/option-fetchers';
+ import { useRefreshAction } from '@/lib/use-action';
+ 
+ export function AddAccountButton() {
+@@ -26,13 +27,26 @@
+ export function AccountRowActions({ account, isSelf }: { account: SessionUser; isSelf: boolean }) {
+   const [linking, setLinking] = useState(false);
+   const { error, setError, run } = useRefreshAction();
++  const confirmAction = useConfirmDialog();
++
++  async function deleteAccount() {
++    const confirmed = await confirmAction({
++      title: 'Delete account',
++      message: `Delete the account for ${account.name}? They can no longer sign in. Their person record is kept and can be given a new login later, and the work they did stays attributed to them.`,
++      confirmLabel: 'Delete account',
++      tone: 'danger',
++    });
++    if (confirmed) await run(() => api(`/users/${account.id}`, { method: 'DELETE' }));
++  }
++
+   return (
+     <>
+       <div className="row-actions">
+-        {account.role !== 'ADMIN' && <button className="btn secondary small" onClick={() => setLinking(true)}>Link profile</button>}
++        <button className="btn secondary small" onClick={() => setLinking(true)}>Link profile</button>
+         {!isSelf && (
+           <button className="btn secondary small" onClick={() => void run(() => api(`/users/${account.id}/active`, { method: 'PATCH', body: { isActive: !account.isActive } }))}>{account.isActive ? 'Disable' : 'Enable'}</button>
+         )}
++        {!isSelf && <button className="btn danger small" onClick={() => void deleteAccount()}>Delete</button>}
+       </div>
+       <ErrorBanner message={error} onDismiss={() => setError('')} />
+       {linking && <LinkProfileModal account={account} onClose={() => setLinking(false)} />}
+@@ -70,7 +84,7 @@
+ }
+ 
+ function LinkProfileModal({ account, onClose }: { account: SessionUser; onClose: () => void }) {
+-  const isPatient = account.role === 'PATIENT';
++  const kind = account.role === 'PATIENT' ? 'PATIENT' : account.role === 'DOCTOR' ? 'DOCTOR' : 'STAFF';
+   const [error, setError] = useState('');
+   const [done, setDone] = useState(false);
+   const [busy, setBusy] = useState(false);
+@@ -79,7 +93,7 @@
+     event.preventDefault();
+     setBusy(true);
+     try {
+-      await api('/users/link-profile', { method: 'POST', body: { userId: account.id, profileType: account.role, profileId: readForm(event.currentTarget).profileId } });
++      await api('/users/link-profile', { method: 'POST', body: { userId: account.id, profileType: kind, profileId: readForm(event.currentTarget).profileId } });
+       setDone(true);
+     } catch (failure) {
+       setError(errorMessage(failure));
+@@ -92,8 +106,8 @@
+     <Modal title={`Link ${account.name}`} eyebrow="PROFILE" onClose={onClose} onSubmit={submit}>
+       <ErrorBanner message={error} />
+       {done && <p className="success-banner">Profile linked.</p>}
+-      <ComboboxField label={isPatient ? 'Patient profile' : 'Doctor profile'} name="profileId" required placeholder="Search by name, email or ID"
+-        fetchOptions={isPatient ? fetchPatientOptions : fetchDoctorOptions} />
++      <ComboboxField label={kind === 'PATIENT' ? 'Patient profile' : kind === 'DOCTOR' ? 'Doctor profile' : 'Staff profile'} name="profileId" required placeholder="Search by name, email or ID"
++        fetchOptions={kind === 'PATIENT' ? fetchPatientOptions : kind === 'DOCTOR' ? fetchDoctorOptions : staffOptionsFetcher(account.role)} />
+       <ModalActions onCancel={onClose} submitLabel="Link profile" busy={busy || done} />
+     </Modal>
+   );
+
+--- a/apps/web/app/(dashboard)/accounts/page.tsx	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/web/app/(dashboard)/accounts/page.tsx	2026-10-24 05:49:02.683027532 +0000
+@@ -18,7 +18,7 @@
+ 
+   return (
+     <>
+-      <PageHeader title="Accounts" description="Sign-in accounts for staff and patients." extra={<AddAccountButton />} />
++      <PageHeader title="Accounts" description="Sign-in accounts only. The people behind them are kept in Patients, Doctors and Staff, so deleting an account never deletes the person." extra={<AddAccountButton />} />
+       <ListPanel title="User accounts" description={`${data.total.toLocaleString('en-US')} accounts`}>
+         <AccountsTable data={data} sort={sort} selfId={me.id} />
+       </ListPanel>
+
+--- a/apps/web/app/(dashboard)/staff/_components/staff-actions.client.tsx	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/web/app/(dashboard)/staff/_components/staff-actions.client.tsx	2026-10-24 05:49:02.787125437 +0000
+@@ -0,0 +1,97 @@
++'use client';
++import { Plus } from 'lucide-react';
++import { useState } from 'react';
++import { STAFF_ROLES, type StaffMember } from '@healthcare/types';
++import { ErrorBanner } from '@/components/ui/Feedback';
++import { Checkbox, Field, Select } from '@/components/ui/Fields';
++import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
++import { Modal, ModalActions } from '@/components/ui/Modal';
++import { api } from '@/lib/api-client';
++import { fullName, titleCase } from '@/lib/format';
++import { readForm, toPayload } from '@/lib/form';
++import { createLoginFor, splitLoginChoice } from '@/lib/profile-login';
++import { useRefreshAction } from '@/lib/use-action';
++import { useProfileSave } from '@/lib/use-profile-save';
++
++const OPTIONAL_FIELDS = ['phone', 'jobTitle'];
++const ROLE_OPTIONS = STAFF_ROLES.map((role) => ({ value: role, label: titleCase(role) }));
++
++export function AddStaffButton() {
++  const [open, setOpen] = useState(false);
++  const { refresh } = useRefreshAction();
++  return (
++    <>
++      <button className="btn primary" onClick={() => setOpen(true)}><Plus size={17} /> Add staff member</button>
++      {open && <StaffModal member={null} onClose={() => setOpen(false)} onSaved={() => { setOpen(false); refresh(); }} />}
++    </>
++  );
++}
++
++export function StaffRowActions({ member }: { member: StaffMember }) {
++  const [editing, setEditing] = useState(false);
++  const { error, setError, run, refresh } = useRefreshAction();
++  const confirmAction = useConfirmDialog();
++
++  async function removeMember() {
++    const confirmed = await confirmAction({
++      title: 'Remove staff member',
++      message: `Remove ${fullName(member)}? Their history is preserved.`,
++      confirmLabel: 'Remove',
++      tone: 'danger',
++    });
++    if (confirmed) await run(() => api(`/staff/${member.id}`, { method: 'DELETE' }));
++  }
++
++  async function createLogin() {
++    const confirmed = await confirmAction({
++      title: 'Create login',
++      message: `Create a ${titleCase(member.role)} login for ${fullName(member)} and email an invitation to ${member.email}?`,
++      confirmLabel: 'Send invitation',
++    });
++    if (confirmed) await run(() => createLoginFor('STAFF', member.id));
++  }
++
++  return (
++    <>
++      <div className="row-actions">
++        <button className="btn secondary small" onClick={() => setEditing(true)}>Edit</button>
++        {!member.userId && <button className="btn secondary small" onClick={() => void createLogin()}>Create login</button>}
++        <button className="btn secondary small" onClick={() => void run(() => api(`/staff/${member.id}`, { method: 'PATCH', body: { isActive: !member.isActive } }))}>{member.isActive ? 'Deactivate' : 'Activate'}</button>
++        {!member.userId && <button className="btn danger small" onClick={() => void removeMember()}>Remove</button>}
++      </div>
++      <ErrorBanner message={error} onDismiss={() => setError('')} />
++      {editing && <StaffModal member={member} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); refresh(); }} />}
++    </>
++  );
++}
++
++function StaffModal({ member, onClose, onSaved }: { member: StaffMember | null; onClose: () => void; onSaved: () => void }) {
++  const { error, busy, partlySaved, save } = useProfileSave('Staff member', onSaved);
++  const close = partlySaved ? onSaved : onClose;
++
++  function submit(event: React.FormEvent<HTMLFormElement>) {
++    event.preventDefault();
++    const { wantsLogin, recordValues } = splitLoginChoice(readForm(event.currentTarget));
++    const body = toPayload(recordValues, OPTIONAL_FIELDS, member ? 'update' : 'create');
++    const request = () => api<StaffMember>(member ? `/staff/${member.id}` : '/staff', { method: member ? 'PATCH' : 'POST', body });
++    return save(request, wantsLogin ? (id) => createLoginFor('STAFF', id) : undefined);
++  }
++
++  return (
++    <Modal title={member ? 'Edit staff member' : 'Add staff member'} eyebrow={member ? 'UPDATE' : 'NEW RECORD'} onClose={close} onSubmit={submit}>
++      <ErrorBanner message={error} />
++      <div className="field-row">
++        <Field label="First name" name="firstName" required defaultValue={member?.firstName} />
++        <Field label="Last name" name="lastName" required defaultValue={member?.lastName} />
++      </div>
++      <Field label="Email address" name="email" type="email" required defaultValue={member?.email} />
++      <Field label="Phone number" name="phone" defaultValue={member?.phone} />
++      {member?.userId
++        ? <p className="auth-description">Role: {titleCase(member.role)}. It matches this person&apos;s login, so delete the account first to change it.</p>
++        : <Select label="Role" name="role" required defaultValue={member?.role ?? 'NURSE'} options={ROLE_OPTIONS} />}
++      <Field label="Job title" name="jobTitle" defaultValue={member?.jobTitle} />
++      {!member && <Checkbox name="createLogin" label="Give this person a login" hint="Creates an account with this email address and role, and emails an invitation to choose a password." />}
++      <ModalActions onCancel={close} submitLabel="Save staff member" busy={busy || partlySaved} />
++    </Modal>
++  );
++}
+
+--- a/apps/web/app/(dashboard)/staff/_components/staff-table.client.tsx	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/web/app/(dashboard)/staff/_components/staff-table.client.tsx	2026-10-24 05:49:02.786999632 +0000
+@@ -0,0 +1,34 @@
++'use client';
++import type { ColumnDef } from '@tanstack/react-table';
++import { STAFF_ROLES, type Paginated, type StaffMember } from '@healthcare/types';
++import { DataTable } from '@/components/ui/DataTable';
++import { PersonCell } from '@/components/ui/Page';
++import { StatusBadge } from '@/components/ui/StatusBadge';
++import { fullName, titleCase } from '@/lib/format';
++import type { SortSpec } from '@/lib/search-params';
++import { StaffRowActions } from './staff-actions.client';
++import { STAFF_DEFAULT_SORT } from './staff-table.config';
++
++const ROLE_OPTIONS = STAFF_ROLES.map((value) => ({ value, label: titleCase(value) }));
++
++export function StaffTable({ data, sort }: { data: Paginated<StaffMember>; sort: SortSpec }) {
++  const columns: ColumnDef<StaffMember>[] = [
++    { id: 'name', header: 'Staff member', enableSorting: true, enableHiding: false, cell: ({ row }) => <PersonCell name={fullName(row.original)} tone="doctor" /> },
++    { id: 'role', header: 'Role', enableSorting: true, cell: ({ row }) => <StatusBadge value={row.original.role} /> },
++    { id: 'jobTitle', header: 'Job title', enableSorting: true, cell: ({ row }) => row.original.jobTitle || '—' },
++    { id: 'email', header: 'Email address', enableSorting: true, cell: ({ row }) => row.original.email },
++    { id: 'login', header: 'Login', cell: ({ row }) => (row.original.userId ? 'Has login' : 'No login') },
++    { id: 'status', header: 'Status', enableSorting: true, cell: ({ row }) => <StatusBadge value={row.original.isActive ? 'ACTIVE' : 'INACTIVE'} /> },
++    { id: 'actions', header: 'Actions', enableHiding: false, cell: ({ row }) => <StaffRowActions member={row.original} /> },
++  ];
++  return (
++    <DataTable
++      columns={columns} data={data} sort={sort} defaultSort={STAFF_DEFAULT_SORT} storageKey="staff" getRowId={(row) => row.id}
++      emptyLabel="staff members" searchPlaceholder="Search name, job title or email…"
++      filters={[
++        { type: 'select', param: 'role', label: 'Filter by role', allLabel: 'All roles', options: ROLE_OPTIONS },
++        { type: 'checkbox', param: 'includeInactive', label: 'Show inactive' },
++      ]}
++    />
++  );
++}
+
+--- a/apps/web/app/(dashboard)/staff/_components/staff-table.config.ts	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/web/app/(dashboard)/staff/_components/staff-table.config.ts	2026-10-24 05:49:02.786758493 +0000
+@@ -0,0 +1,5 @@
++import type { SortSpec } from '@/lib/search-params';
++
++/** Plain module (no 'use client') so server pages can read these values; client files only export references. */
++export const STAFF_SORTABLE = ['name', 'role', 'jobTitle', 'email', 'status'] as const;
++export const STAFF_DEFAULT_SORT: SortSpec = { id: 'name', desc: false };
+
+--- a/apps/web/app/(dashboard)/staff/page.tsx	1970-01-01 00:00:00.000000000 +0000
++++ b/apps/web/app/(dashboard)/staff/page.tsx	2026-10-24 05:49:02.787295395 +0000
+@@ -0,0 +1,24 @@
++import { STAFF_ROLES, type Paginated, type StaffMember } from '@healthcare/types';
++import { ListPanel, PageHeader } from '@/components/ui/Page';
++import { first, oneOf, tableQuery, type PageSearchParams } from '@/lib/search-params';
++import { serverApi } from '@/lib/server-api';
++import { AddStaffButton } from './_components/staff-actions.client';
++import { StaffTable } from './_components/staff-table.client';
++import { STAFF_DEFAULT_SORT, STAFF_SORTABLE } from './_components/staff-table.config';
++
++export default async function StaffPage({ searchParams }: { searchParams: PageSearchParams }) {
++  const params = await searchParams;
++  const { page, limit, q, sort, apiSort } = tableQuery(params, { sortable: STAFF_SORTABLE, defaultSort: STAFF_DEFAULT_SORT });
++  const role = oneOf(params.role, STAFF_ROLES);
++  const includeInactive = first(params.includeInactive) === 'true';
++  const data = await serverApi<Paginated<StaffMember>>('/staff', { query: { page, limit, q, role, includeInactive: includeInactive ? true : undefined, ...apiSort } });
++
++  return (
++    <>
++      <PageHeader title="Staff" description="Nurses, cashiers, lab, pharmacy, ward and front-desk team. A staff record exists on its own; a login is optional and can be removed without losing it." extra={<AddStaffButton />} />
++      <ListPanel title="Staff directory" description={`${data.total.toLocaleString('en-US')} staff members`}>
++        <StaffTable data={data} sort={sort} />
++      </ListPanel>
++    </>
++  );
++}
+
+--- a/apps/web/components/shell/DashboardShell.tsx	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/web/components/shell/DashboardShell.tsx	2026-10-24 05:49:02.792719165 +0000
+@@ -1,5 +1,5 @@
+ 'use client';
+-import { CalendarDays, ClipboardList, FileText, LayoutDashboard, LogOut, Pill, ReceiptText, ScrollText, Settings, Stethoscope, UserRound, Users, Activity, FlaskConical, BedDouble, Baby, BarChart3, Building2, WalletCards } from 'lucide-react';
++import { CalendarDays, ClipboardList, FileText, LayoutDashboard, LogOut, Pill, ReceiptText, ScrollText, Settings, Stethoscope, UserRound, Users, Activity, FlaskConical, BedDouble, Baby, BarChart3, Building2, WalletCards, IdCard } from 'lucide-react';
+ import Link from 'next/link';
+ import { usePathname } from 'next/navigation';
+ import { useAuth } from '@/components/auth/AuthProvider';
+@@ -13,7 +13,7 @@
+ const ICONS: Record<NavEntry['icon'], typeof Users> = {
+   overview: LayoutDashboard, appointments: CalendarDays, patients: Users, doctors: Stethoscope, records: FileText,
+   prescriptions: Pill, invoices: ReceiptText, accounts: UserRound, audit: ScrollText, settings: Settings,
+-  visits: Activity, laboratory: FlaskConical, pharmacy: Pill, inpatient: BedDouble, maternity: Baby, reports: BarChart3, platform: Building2, billing: WalletCards,
++  visits: Activity, laboratory: FlaskConical, pharmacy: Pill, inpatient: BedDouble, maternity: Baby, reports: BarChart3, platform: Building2, billing: WalletCards, staff: IdCard,
+ };
+ 
+ function isActive(pathname: string, href: string): boolean {
+
+--- a/apps/web/lib/nav.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/web/lib/nav.ts	2026-10-24 05:49:02.794960939 +0000
+@@ -3,7 +3,7 @@
+ export interface NavEntry {
+   href: string;
+   label: string;
+-  icon: 'overview' | 'appointments' | 'patients' | 'doctors' | 'records' | 'prescriptions' | 'invoices' | 'accounts' | 'audit' | 'settings' | 'visits' | 'laboratory' | 'pharmacy' | 'inpatient' | 'maternity' | 'reports' | 'platform' | 'billing';
++  icon: 'overview' | 'appointments' | 'patients' | 'doctors' | 'records' | 'prescriptions' | 'invoices' | 'accounts' | 'audit' | 'settings' | 'visits' | 'laboratory' | 'pharmacy' | 'inpatient' | 'maternity' | 'reports' | 'platform' | 'billing' | 'staff';
+   roles: UserRole[];
+ }
+ 
+@@ -16,6 +16,7 @@
+   { href: '/visits', label: 'Visits & queue', icon: 'visits', roles: ['ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'] },
+   { href: '/patients', label: 'Patients', icon: 'patients', roles: ['ADMIN', 'DOCTOR', 'NURSE', 'RECEPTIONIST'] },
+   { href: '/doctors', label: 'Doctors', icon: 'doctors', roles: ALL },
++  { href: '/staff', label: 'Staff', icon: 'staff', roles: ['ADMIN'] },
+   { href: '/medical-records', label: 'Medical records', icon: 'records', roles: ['ADMIN', 'DOCTOR', 'NURSE', 'PATIENT'] },
+   { href: '/prescriptions', label: 'Prescriptions', icon: 'prescriptions', roles: ['ADMIN', 'DOCTOR', 'PATIENT', 'PHARMACIST'] },
+   { href: '/laboratory', label: 'Laboratory', icon: 'laboratory', roles: ['ADMIN', 'DOCTOR', 'LAB'] },
+
+--- a/apps/web/lib/option-fetchers.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/web/lib/option-fetchers.ts	2026-10-24 05:49:02.795059838 +0000
+@@ -1,4 +1,4 @@
+-import type { Doctor, Drug, MedicalRecord, Paginated, Patient, Visit } from '@healthcare/types';
++import type { Doctor, Drug, StaffMember, MedicalRecord, Paginated, Patient, Visit } from '@healthcare/types';
+ import type { ComboOption } from '@/components/ui/ComboboxField';
+ import { api } from './api-client';
+ import { formatDate, fullName } from './format';
+@@ -25,6 +25,14 @@
+   }));
+ }
+ 
++/** Staff records of one role (an account can only be linked to a staff record with the same role). */
++export function staffOptionsFetcher(role: string) {
++  return async (term: string): Promise<ComboOption[]> => {
++    const result = await api<Paginated<StaffMember>>('/staff', { query: { q: term || undefined, role, limit: OPTION_PAGE_SIZE } });
++    return result.items.map((member) => ({ value: member.id, label: fullName(member), description: [member.jobTitle, member.email].filter(Boolean).join(' · ') }));
++  };
++}
++
+ export function recordOptionsFetcher(patientId: string) {
+   return async (term: string): Promise<ComboOption[]> => {
+     const result = await api<Paginated<MedicalRecord>>('/medical-records', { query: { patientId, q: term || undefined, limit: OPTION_PAGE_SIZE } });
+
+--- a/apps/web/lib/profile-login.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/apps/web/lib/profile-login.ts	2026-10-24 05:49:02.795172648 +0000
+@@ -1,12 +1,12 @@
+ import { api } from './api-client';
+ import type { FormValues } from './form';
+ 
+-export type LoginProfileType = 'PATIENT' | 'DOCTOR';
++export type LoginProfileType = 'PATIENT' | 'DOCTOR' | 'STAFF';
+ 
+ const LOGIN_CHOICE_FIELD = 'createLogin';
+ const CHECKED_VALUE = 'on';
+ 
+-/** Creates the account for an existing patient/doctor record, e-mails an invitation and links it. */
++/** Creates the account for an existing patient, doctor or staff record, e-mails an invitation and links it. */
+ export function createLoginFor(profileType: LoginProfileType, profileId: string): Promise<unknown> {
+   return api('/users/from-profile', { method: 'POST', body: { profileType, profileId } });
+ }
+
+--- a/packages/types/src/index.ts	2026-10-22 17:56:06.000000000 +0000
++++ b/packages/types/src/index.ts	2026-10-24 05:49:02.898262826 +0000
+@@ -12,7 +12,7 @@
+ 
+ export const GENDERS = ['MALE', 'FEMALE'] as const;
+ 
+-export const AUDIT_TARGETS = ['user', 'patient', 'doctor', 'appointment', 'medical_record', 'prescription', 'invoice', 'payment'] as const;
++export const AUDIT_TARGETS = ['user', 'patient', 'doctor', 'staff', 'appointment', 'medical_record', 'prescription', 'invoice', 'payment'] as const;
+ export type AuditTarget = (typeof AUDIT_TARGETS)[number];
+ 
+ export interface Paginated<T> {
+@@ -69,6 +69,22 @@
+   isActive: boolean;
+   userId: string | null;
+ }
++
++/** Roles whose person record is a StaffMember (doctors and patients have their own record types). */
++export const STAFF_ROLES = ['ADMIN', 'NURSE', 'RECEPTIONIST', 'CASHIER', 'LAB', 'PHARMACIST', 'HMO_DESK', 'WARD_MANAGER'] as const;
++export type StaffRole = (typeof STAFF_ROLES)[number];
++
++export interface StaffMember {
++  id: string;
++  firstName: string;
++  lastName: string;
++  email: string;
++  phone: string | null;
++  role: StaffRole;
++  jobTitle: string | null;
++  isActive: boolean;
++  userId: string | null;
++}
+ 
+ export interface DoctorSummary {
+   id: string;
